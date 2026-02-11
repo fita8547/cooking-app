@@ -10,6 +10,7 @@ import usersRouter from './routes/users.js';
 import ingredientsRouter from './routes/ingredients.js';
 import mealsRouter from './routes/meals.js';
 import uploadRouter from './routes/upload.js';
+import aiRouter from './routes/ai.js';
 
 dotenv.config();
 
@@ -48,6 +49,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/recipes', recipesRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/ingredients', ingredientsRouter);
+app.use('/api/ai', aiRouter);
 app.use('/api/meals', mealsRouter);
 app.use('/api/upload', uploadRouter);
 
