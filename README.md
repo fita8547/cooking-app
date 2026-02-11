@@ -88,6 +88,41 @@ cooking-app/
 5. **건강 프로필**: 건강 정보 입력 및 BMR 계산
 6. **식사 기록**: 과거 식사 내역 및 통계
 
+## 🔀 Git 워크플로우
+
+이 프로젝트는 Git Flow 기반의 브랜치 전략을 사용합니다.
+
+### 브랜치 구조
+- `main` - 프로덕션 배포 브랜치 (직접 커밋 금지)
+- `dev` - 개발 통합 브랜치 (PR을 통해서만 병합)
+- `feature/N` - 기능 개발 브랜치 (자유롭게 커밋 가능)
+
+### 개발 워크플로우
+
+1. **새 기능 개발 시작**
+   ```bash
+   git checkout dev
+   git pull origin dev
+   git checkout -b feature/35
+   ```
+
+2. **작업 및 커밋**
+   ```bash
+   git add .
+   git commit -m "feat: 새로운 기능 추가"
+   git push origin feature/35
+   ```
+
+3. **Pull Request 생성**
+   - GitHub에서 `feature/35` → `dev` PR 생성
+   - 코드 리뷰 후 병합
+
+4. **dev에서 main으로 배포**
+   - 충분한 테스트 후 `dev` → `main` PR 생성
+   - 리뷰 및 승인 후 병합
+
+자세한 내용은 [CONTRIBUTING.md](./CONTRIBUTING.md)를 참고하세요.
+
 ## 🔮 향후 계획
 
 - [ ] OpenAI API 통합 (레시피 생성)
