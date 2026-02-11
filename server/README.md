@@ -34,10 +34,32 @@ npm run server:dev
 
 ## API 엔드포인트
 
+### 인증 (Auth)
+- `POST /api/auth/register` - 회원가입
+  ```json
+  {
+    "email": "user@example.com",
+    "password": "password123",
+    "name": "홍길동"
+  }
+  ```
+- `POST /api/auth/login` - 로그인
+  ```json
+  {
+    "email": "user@example.com",
+    "password": "password123"
+  }
+  ```
+- `GET /api/auth/me` - 현재 사용자 정보 (인증 필요)
+- `PUT /api/auth/password` - 비밀번호 변경 (인증 필요)
+
 ### 헬스 체크
 - `GET /api/health` - 서버 상태 확인
 
 ### 레시피 (Recipes)
+- `GET /api/recipes/search` - 레시피 검색 및 필터링
+  - Query: `keyword`, `category`, `difficulty`, `maxCookingTime`, `tags`, `page`, `limit`
+- `GET /api/recipes/popular` - 인기 레시피 조회
 - `POST /api/recipes/recommend` - 재료 기반 레시피 추천
   ```json
   {
@@ -45,7 +67,14 @@ npm run server:dev
   }
   ```
 - `GET /api/recipes/:id` - 레시피 상세 조회
-- `POST /api/recipes` - 레시피 생성
+- `POST /api/recipes` - 레시피 생성 (인증 필요)
+- `PUT /api/recipes/:id` - 레시피 수정 (인증 필요)
+- `DELETE /api/recipes/:id` - 레시피 삭제 (인증 필요)
+
+### 이미지 업로드 (Upload)
+- `POST /api/upload/image` - 단일 이미지 업로드 (인증 필요)
+- `POST /api/upload/images` - 다중 이미지 업로드 (인증 필요, 최대 5개)
+- `POST /api/upload/ingredient-recognition` - 재료 인식용 이미지 업로드 (인증 필요)
 
 ### 재료 (Ingredients)
 - `GET /api/ingredients?userId=xxx` - 사용자 재료 목록 조회

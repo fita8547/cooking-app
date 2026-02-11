@@ -1,13 +1,20 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import connectDB from './config/database.js';
+import authRouter from './routes/auth.js';
 import recipesRouter from './routes/recipes.js';
 import usersRouter from './routes/users.js';
 import ingredientsRouter from './routes/ingredients.js';
 import mealsRouter from './routes/meals.js';
+import uploadRouter from './routes/upload.js';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,6 +31,9 @@ if (process.env.MONGODB_URI) {
 app.use(cors());
 app.use(express.json());
 
+// 정적 파일 제공 (업로드된 이미지)
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // 헬스 체크
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -34,10 +44,12 @@ app.get('/api/health', (req, res) => {
 });
 
 // 라우터 연결
+app.use('/api/auth', authRouter);
 app.use('/api/recipes', recipesRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/ingredients', ingredientsRouter);
 app.use('/api/meals', mealsRouter);
+app.use('/api/upload', uploadRouter);
 
 // 404 핸들러
 app.use((req, res) => {
@@ -47,7 +59,7 @@ app.use((req, res) => {
 // 에러 핸들러
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ error: '서버 오류가 발생했습니다' });
+  res.status(500).json({ error: err.message || '서버 오류가 발생했습니다' });
 });
 
 app.listen(PORT, () => {
