@@ -380,18 +380,21 @@ export default function AdCookingClass() {
       const recipes = await generateRecipes(ingredients, profile, filterMode);
       
       // 레시피에 ID와 추가 정보 부여
-      const recipesWithMetadata = recipes.map((recipe, index) => ({
-        ...recipe,
-        id: Date.now() + index,
-        matchedIngredients: recipe.ingredients
-          .filter(ing => ing.isAvailable)
-          .map(ing => ing.name),
-        missingIngredients: recipe.ingredients
-          .filter(ing => !ing.isAvailable)
-          .map(ing => ing.name),
-        canMakeWithOwned: recipe.ingredients.every(ing => ing.isAvailable),
-        purchaseLinks: {} // 실제로는 쇼핑몰 API 연동
-      }));
+      const recipesWithMetadata = recipes.map((recipe, index) => {
+        const recipeIngredients = recipe.ingredients || [];
+        return {
+          ...recipe,
+          id: Date.now() + index,
+          matchedIngredients: recipeIngredients
+            .filter(ing => ing.isAvailable)
+            .map(ing => ing.name),
+          missingIngredients: recipeIngredients
+            .filter(ing => !ing.isAvailable)
+            .map(ing => ing.name),
+          canMakeWithOwned: recipeIngredients.length > 0 && recipeIngredients.every(ing => ing.isAvailable),
+          purchaseLinks: {} // 실제로는 쇼핑몰 API 연동
+        };
+      });
 
       setAiRecipes(recipesWithMetadata);
     } catch (err) {
@@ -414,13 +417,14 @@ export default function AdCookingClass() {
     if (ingredients.length === 0) return sampleRecipes;
     
     const recipesWithMatch = sampleRecipes.map(recipe => {
-      const matchedIngredients = recipe.ingredients.filter(recipeIng =>
+      const recipeIngredients = recipe.ingredients || [];
+      const matchedIngredients = recipeIngredients.filter(recipeIng =>
         ingredients.some(userIng => 
           recipeIng.toLowerCase().includes(userIng.toLowerCase()) ||
           userIng.toLowerCase().includes(recipeIng.toLowerCase())
         )
       );
-      const missingIngredients = recipe.ingredients.filter(recipeIng =>
+      const missingIngredients = recipeIngredients.filter(recipeIng =>
         !ingredients.some(userIng => 
           recipeIng.toLowerCase().includes(userIng.toLowerCase()) ||
           userIng.toLowerCase().includes(recipeIng.toLowerCase())
@@ -739,22 +743,22 @@ export default function AdCookingClass() {
                   <div className="matched-ingredients">
                     <div className="ingredient-status">
                       <span className="status-label">보유 재료:</span>
-                      {recipe.matchedIngredients.slice(0, 3).map((ing, idx) => (
+                      {recipe.matchedIngredients && recipe.matchedIngredients.slice(0, 3).map((ing, idx) => (
                         <span key={idx} className="mini-tag matched">{ing}</span>
                       ))}
-                      {recipe.matchedIngredients.length > 3 && (
+                      {recipe.matchedIngredients && recipe.matchedIngredients.length > 3 && (
                         <span className="mini-tag">+{recipe.matchedIngredients.length - 3}</span>
                       )}
                     </div>
                     
                     {/* 부족한 재료 */}
-                    {recipe.missingIngredients.length > 0 && (
+                    {recipe.missingIngredients && recipe.missingIngredients.length > 0 && (
                       <div className="ingredient-status missing-section">
                         <span className="status-label missing">필요 재료:</span>
                         {recipe.missingIngredients.map((ing, idx) => (
                           <span key={idx} className="mini-tag missing-tag">
                             {ing}
-                            {recipe.purchaseLinks[ing] && (
+                            {recipe.purchaseLinks && recipe.purchaseLinks[ing] && (
                               <a href={recipe.purchaseLinks[ing]} target="_blank" rel="noopener noreferrer" className="purchase-link">
                                 <ExternalLink size={12} />
                               </a>
