@@ -16,6 +16,13 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  isEmailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerificationToken: String,
+  emailVerificationCode: String,
+  emailVerificationExpires: Date,
   healthProfile: {
     age: Number,
     gender: { type: String, enum: ['male', 'female', 'other'] },
