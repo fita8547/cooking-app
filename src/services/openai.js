@@ -5,11 +5,21 @@ let openai = null;
 
 // API 키가 있을 때만 초기화
 const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-if (apiKey && apiKey !== 'your_openai_api_key_here' && apiKey.startsWith('sk-')) {
+console.log('🔑 API Key 확인:', apiKey ? `${apiKey.substring(0, 10)}...` : 'undefined');
+console.log('🔑 API Key 시작:', apiKey?.substring(0, 8));
+
+if (apiKey && apiKey !== 'your_openai_api_key_here' && (apiKey.startsWith('sk-') || apiKey.startsWith('sk-proj-'))) {
+  console.log('✅ OpenAI 클라이언트 초기화 성공');
   openai = new OpenAI({
     apiKey: apiKey,
     dangerouslyAllowBrowser: true // 프로덕션에서는 백엔드에서 호출해야 함
   });
+} else {
+  console.log('❌ OpenAI 클라이언트 초기화 실패');
+  console.log('   - API Key 존재:', !!apiKey);
+  console.log('   - 기본값 아님:', apiKey !== 'your_openai_api_key_here');
+  console.log('   - sk- 시작:', apiKey?.startsWith('sk-'));
+  console.log('   - sk-proj- 시작:', apiKey?.startsWith('sk-proj-'));
 }
 
 /**
