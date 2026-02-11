@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ChefHat, Refrigerator, Heart, ShoppingCart, Clock, User, Sparkles, Flame, Leaf, AlertCircle, Camera, Plus, Minus, ThumbsUp, ThumbsDown, Calendar, TrendingUp, X, ExternalLink } from 'lucide-react';
+import { ChefHat, Refrigerator, Heart, ShoppingCart, Clock, User, Sparkles, Flame, Leaf, AlertCircle, Camera, Plus, Minus, ThumbsUp, ThumbsDown, Calendar, TrendingUp, X, ExternalLink, Loader2 } from 'lucide-react';
+import { generateRecipes, recognizeIngredients, isApiKeyConfigured } from './services/openai';
 
 export default function AdCookingClass() {
   const [currentPage, setCurrentPage] = useState('home');
@@ -25,6 +26,12 @@ export default function AdCookingClass() {
   ]);
   const [showImageUpload, setShowImageUpload] = useState(false);
   const [recognizedIngredients, setRecognizedIngredients] = useState([]);
+  
+  // AI 관련 상태
+  const [aiRecipes, setAiRecipes] = useState([]);
+  const [isLoadingRecipes, setIsLoadingRecipes] = useState(false);
+  const [isRecognizingImage, setIsRecognizingImage] = useState(false);
+  const [error, setError] = useState(null);
 
   // 샘플 레시피 데이터
   const sampleRecipes = [
@@ -158,17 +165,34 @@ export default function AdCookingClass() {
     setIngredients(ingredients.filter(i => i !== ing));
   };
 
-  // 이미지 업로드 후 재료 인식 시뮬레이션
-  const handleImageUpload = (e) => {
+  // 이미지 업로드 후 재료 인식 (OpenAI Vision API 사용)
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      // 실제로는 AI 이미지 분석 API 호출
-      // 여기서는 시뮬레이션
-      setTimeout(() => {
-        const detected = ['김치', '두부', '양파', '계란', '대파'];
-        setRecognizedIngredients(detected);
-        setShowImageUpload(false);
-      }, 1500);
+    if (!file) return;
+
+    // API 키 확인
+    if (!isApiKeyConfigured()) {
+      alert('OpenAI API 키가 설정되지 않았습니다. .env 파일에 VITE_OPENAI_API_KEY를 설정해주세요.');
+      return;
+    }
+
+    setIsRecognizingImage(true);
+    setError(null);
+
+    try {
+      const detected = await recognizeIngredients(file);
+      const ingredientNames = detected
+        .filter(item => item.confidence > 0.5) // 신뢰도 50% 이상만
+        .map(item => item.name);
+      
+      setRecognizedIngredients(ingredientNames);
+      setShowImageUpload(false);
+    } catch (err) {
+      console.error('재료 인식 실패:', err);
+      setError(err.message);
+      alert(err.message);
+    } finally {
+      setIsRecognizingImage(false);
     }
   };
 
@@ -183,8 +207,100 @@ export default function AdCookingClass() {
     setRecognizedIngredients(recognizedIngredients.filter(i => i !== ing));
   };
 
-  // 레시피 필터링 및 정렬
+  // BMR 및 목표 칼로리 계산 함수
+  const calculateBMR = () => {
+    const { age, gender, height, weight } = healthProfile;
+    if (!age || !gender || !height || !weight) return null;
+    
+    let bmr;
+    if (gender === 'male') {
+      bmr = 88.362 + (13.397 * parseFloat(weight)) + (4.799 * parseFloat(height)) - (5.677 * parseFloat(age));
+    } else {
+      bmr = 447.593 + (9.247 * parseFloat(weight)) + (3.098 * parseFloat(height)) - (4.330 * parseFloat(age));
+    }
+    
+    return Math.round(bmr);
+  };
+
+  const calculateTargetCalories = () => {
+    const bmr = calculateBMR();
+    if (!bmr || !healthProfile.goal) return null;
+    
+    const activityMultiplier = 1.375;
+    const tdee = bmr * activityMultiplier;
+    
+    let targetCalories = tdee;
+    if (healthProfile.goal === 'lose') {
+      targetCalories = tdee - 500;
+    } else if (healthProfile.goal === 'gain') {
+      targetCalories = tdee + 500;
+    } else if (healthProfile.goal === 'muscle') {
+      targetCalories = tdee + 300;
+    }
+    
+    return Math.round(targetCalories);
+  };
+
+  // AI 레시피 생성 함수
+  const generateAIRecipes = async () => {
+    if (ingredients.length === 0) {
+      alert('재료를 먼저 입력해주세요.');
+      return;
+    }
+
+    // API 키 확인
+    if (!isApiKeyConfigured()) {
+      alert('OpenAI API 키가 설정되지 않았습니다. .env 파일에 VITE_OPENAI_API_KEY를 설정해주세요.');
+      return;
+    }
+
+    setIsLoadingRecipes(true);
+    setError(null);
+
+    try {
+      // 건강 프로필 준비
+      const profile = {
+        age: healthProfile.age ? parseInt(healthProfile.age) : undefined,
+        gender: healthProfile.gender,
+        targetCalories: calculateTargetCalories(),
+        allergies: healthProfile.allergies,
+        goal: healthProfile.goal
+      };
+
+      const recipes = await generateRecipes(ingredients, profile, filterMode);
+      
+      // 레시피에 ID와 추가 정보 부여
+      const recipesWithMetadata = recipes.map((recipe, index) => ({
+        ...recipe,
+        id: Date.now() + index,
+        matchedIngredients: recipe.ingredients
+          .filter(ing => ing.isAvailable)
+          .map(ing => ing.name),
+        missingIngredients: recipe.ingredients
+          .filter(ing => !ing.isAvailable)
+          .map(ing => ing.name),
+        canMakeWithOwned: recipe.ingredients.every(ing => ing.isAvailable),
+        purchaseLinks: {} // 실제로는 쇼핑몰 API 연동
+      }));
+
+      setAiRecipes(recipesWithMetadata);
+    } catch (err) {
+      console.error('레시피 생성 실패:', err);
+      setError(err.message);
+      alert(err.message);
+    } finally {
+      setIsLoadingRecipes(false);
+    }
+  };
+
+  // 레시피 필터링 및 정렬 (AI 레시피 + 샘플 레시피 통합)
   const getRecommendedRecipes = () => {
+    // AI 레시피가 있으면 우선 사용
+    if (aiRecipes.length > 0) {
+      return aiRecipes;
+    }
+
+    // 샘플 레시피 사용 (기존 로직)
     if (ingredients.length === 0) return sampleRecipes;
     
     const recipesWithMatch = sampleRecipes.map(recipe => {
@@ -361,7 +477,11 @@ export default function AdCookingClass() {
               type="text"
               value={inputIngredient}
               onChange={(e) => setInputIngredient(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && addIngredient()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  addIngredient();
+                }
+              }}
               placeholder="재료를 입력하세요 (예: 김치, 돼지고기)"
               className="input-field"
             />
@@ -374,32 +494,38 @@ export default function AdCookingClass() {
 
           {/* 이미지 업로드 모달 */}
           {showImageUpload && (
-            <div className="modal-overlay" onClick={() => setShowImageUpload(false)}>
+            <div className="modal-overlay" onClick={() => !isRecognizingImage && setShowImageUpload(false)}>
               <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                   <h3>냉장고 촬영하기</h3>
-                  <button onClick={() => setShowImageUpload(false)} className="modal-close">
-                    <X size={24} />
-                  </button>
+                  {!isRecognizingImage && (
+                    <button onClick={() => setShowImageUpload(false)} className="modal-close">
+                      <X size={24} />
+                    </button>
+                  )}
                 </div>
                 <div className="upload-area">
-                  <Camera size={64} />
-                  <p>냉장고 사진을 업로드하세요</p>
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={handleImageUpload}
-                    className="file-input"
-                  />
-                  <label className="btn-primary" style={{marginTop: '16px', cursor: 'pointer'}}>
-                    사진 선택
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleImageUpload}
-                      style={{display: 'none'}}
-                    />
-                  </label>
+                  {isRecognizingImage ? (
+                    <>
+                      <Loader2 size={64} className="spinning" style={{ color: '#6c5ce7' }} />
+                      <p style={{ marginTop: '16px', fontWeight: '600' }}>AI가 재료를 인식하는 중...</p>
+                      <p style={{ fontSize: '14px', color: '#636e72' }}>잠시만 기다려주세요</p>
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={64} />
+                      <p>냉장고 사진을 업로드하세요</p>
+                      <label className="btn-primary" style={{marginTop: '16px', cursor: 'pointer'}}>
+                        사진 선택
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={handleImageUpload}
+                          style={{display: 'none'}}
+                        />
+                      </label>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -438,22 +564,65 @@ export default function AdCookingClass() {
             </div>
           )}
 
-          {/* 필터 옵션 */}
+          {/* 필터 옵션 및 AI 레시피 생성 버튼 */}
           {ingredients.length > 0 && (
-            <div className="filter-section">
-              <button 
-                className={`filter-btn ${filterMode === 'exact' ? 'active' : ''}`}
-                onClick={() => setFilterMode('exact')}
-              >
-                보유 재료만
-              </button>
-              <button 
-                className={`filter-btn ${filterMode === 'partial' ? 'active' : ''}`}
-                onClick={() => setFilterMode('partial')}
-              >
-                일부 재료 추가 허용
-              </button>
-            </div>
+            <>
+              <div className="filter-section">
+                <button 
+                  className={`filter-btn ${filterMode === 'exact' ? 'active' : ''}`}
+                  onClick={() => setFilterMode('exact')}
+                >
+                  보유 재료만
+                </button>
+                <button 
+                  className={`filter-btn ${filterMode === 'partial' ? 'active' : ''}`}
+                  onClick={() => setFilterMode('partial')}
+                >
+                  일부 재료 추가 허용
+                </button>
+              </div>
+              
+              {/* AI 레시피 생성 버튼 */}
+              <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                <button 
+                  onClick={generateAIRecipes}
+                  disabled={isLoadingRecipes}
+                  className="btn-ai-generate"
+                  style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    border: 'none',
+                    padding: '16px 32px',
+                    borderRadius: '12px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: isLoadingRecipes ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    opacity: isLoadingRecipes ? 0.7 : 1,
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  {isLoadingRecipes ? (
+                    <>
+                      <Loader2 size={20} className="spinning" />
+                      AI 레시피 생성 중...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={20} />
+                      AI 레시피 생성
+                    </>
+                  )}
+                </button>
+                {aiRecipes.length > 0 && (
+                  <p style={{ marginTop: '8px', fontSize: '14px', color: '#00b894' }}>
+                    ✓ AI가 {aiRecipes.length}개의 맞춤 레시피를 생성했습니다
+                  </p>
+                )}
+              </div>
+            </>
           )}
         </div>
 
@@ -608,40 +777,6 @@ export default function AdCookingClass() {
 
   // 건강 식단 페이지
   const HealthPage = () => {
-    const calculateBMR = () => {
-      const { age, gender, height, weight } = healthProfile;
-      if (!age || !gender || !height || !weight) return null;
-      
-      // Harris-Benedict 공식
-      let bmr;
-      if (gender === 'male') {
-        bmr = 88.362 + (13.397 * parseFloat(weight)) + (4.799 * parseFloat(height)) - (5.677 * parseFloat(age));
-      } else {
-        bmr = 447.593 + (9.247 * parseFloat(weight)) + (3.098 * parseFloat(height)) - (4.330 * parseFloat(age));
-      }
-      
-      return Math.round(bmr);
-    };
-
-    const calculateTargetCalories = () => {
-      const bmr = calculateBMR();
-      if (!bmr || !healthProfile.goal) return null;
-      
-      const activityMultiplier = 1.375; // 가벼운 활동 기준
-      const tdee = bmr * activityMultiplier;
-      
-      let targetCalories = tdee;
-      if (healthProfile.goal === 'lose') {
-        targetCalories = tdee - 500; // 체중 감량
-      } else if (healthProfile.goal === 'gain') {
-        targetCalories = tdee + 500; // 체중 증가
-      } else if (healthProfile.goal === 'muscle') {
-        targetCalories = tdee + 300; // 근육 증가
-      }
-      
-      return Math.round(targetCalories);
-    };
-
     const bmr = calculateBMR();
     const targetCalories = calculateTargetCalories();
 
@@ -1338,6 +1473,15 @@ export default function AdCookingClass() {
         @keyframes float {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-20px); }
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        .spinning {
+          animation: spin 1s linear infinite;
         }
 
         .feature-grid {

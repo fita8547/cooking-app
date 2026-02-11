@@ -38,12 +38,18 @@
 ### 필수 요구사항
 - Node.js 18.0 이상
 - npm 또는 yarn
+- OpenAI API 키 (AI 기능 사용 시)
 
 ### 설치 및 실행
 
 ```bash
 # 의존성 설치
 npm install
+
+# 환경 변수 설정
+# .env 파일을 생성하고 OpenAI API 키를 설정하세요
+cp .env.example .env
+# .env 파일을 열어 VITE_OPENAI_API_KEY에 실제 API 키를 입력하세요
 
 # 개발 서버 실행
 npm run dev
@@ -57,9 +63,20 @@ npm run preview
 
 개발 서버는 기본적으로 http://localhost:5173 에서 실행됩니다.
 
+### OpenAI API 키 발급 방법
+
+1. [OpenAI Platform](https://platform.openai.com/api-keys)에 접속
+2. 로그인 또는 회원가입
+3. "Create new secret key" 버튼 클릭
+4. 생성된 API 키를 복사
+5. `.env` 파일의 `VITE_OPENAI_API_KEY`에 붙여넣기
+
+**주의:** API 키는 절대 공개 저장소에 커밋하지 마세요!
+
 ## 🛠 기술 스택
 
 - **Frontend**: React 18 + Vite
+- **AI**: OpenAI API (GPT-4o-mini, Vision)
 - **UI 라이브러리**: Lucide React (아이콘)
 - **스타일링**: CSS-in-JS (인라인 스타일)
 - **폰트**: Pretendard
@@ -71,22 +88,73 @@ cooking-app/
 ├── public/
 │   └── chef-hat.svg          # 파비콘
 ├── src/
+│   ├── services/
+│   │   └── openai.js         # OpenAI API 통합 모듈
+│   ├── assets/
+│   │   └── react.svg
 │   ├── App.jsx               # 메인 애플리케이션 컴포넌트
 │   ├── main.jsx              # 엔트리 포인트
 │   └── index.css             # 글로벌 스타일
+├── docs/
+│   ├── AI_INTEGRATION.md     # AI 통합 가이드
+│   ├── DEMO_GUIDE.md         # 데모 및 테스트 가이드
+│   ├── design.md             # 설계 문서
+│   ├── requirements.md       # 요구사항 문서
+│   └── tasks.md              # 작업 목록
+├── .env                      # 환경 변수 (Git 제외)
+├── .env.example              # 환경 변수 예제
 ├── index.html                # HTML 템플릿
 ├── package.json              # 프로젝트 설정
-└── vite.config.js            # Vite 설정
+├── vite.config.js            # Vite 설정
+└── AI_INTEGRATION_SUMMARY.md # AI 통합 요약
 ```
 
 ## 🎨 주요 페이지
 
 1. **로그인 페이지**: 사용자 인증
 2. **홈 페이지**: 주요 기능 소개
-3. **레시피 추천**: 재료 입력 및 레시피 추천
+3. **레시피 추천**: 재료 입력 및 AI 레시피 추천
 4. **요리 가이드**: 단계별 조리 안내
 5. **건강 프로필**: 건강 정보 입력 및 BMR 계산
 6. **식사 기록**: 과거 식사 내역 및 통계
+
+## 💡 AI 기능 사용 예시
+
+### 1. AI 레시피 생성
+```javascript
+// 재료 입력
+재료: 김치, 돼지고기, 두부, 양파
+
+// AI 레시피 생성 버튼 클릭
+→ AI가 3개의 맞춤형 레시피 생성
+  - 김치찌개 (450kcal, 조리시간 30분)
+  - 두부김치 (320kcal, 조리시간 15분)
+  - 김치볶음밥 (520kcal, 조리시간 20분)
+```
+
+### 2. 재료 인식
+```javascript
+// 냉장고 사진 업로드
+→ AI가 자동으로 재료 인식
+  ✓ 김치 (신뢰도: 95%)
+  ✓ 계란 (신뢰도: 92%)
+  ✓ 양파 (신뢰도: 88%)
+  ✕ 물병 (신뢰도: 45%) - 제외
+```
+
+### 3. 건강 프로필 기반 추천
+```javascript
+// 건강 정보 입력
+나이: 30세, 성별: 남성
+키: 175cm, 체중: 70kg
+목표: 체중 감량
+알레르기: 우유, 땅콩
+
+// AI 레시피 생성
+→ 목표 칼로리: 1800kcal
+→ 알레르기 재료 자동 제외
+→ 저칼로리 레시피 우선 추천
+```
 
 ## 🔀 Git 워크플로우
 
@@ -125,8 +193,8 @@ cooking-app/
 
 ## 🔮 향후 계획
 
-- [ ] OpenAI API 통합 (레시피 생성)
-- [ ] OpenAI Vision API 통합 (재료 인식)
+- [x] OpenAI API 통합 (레시피 생성) ✅
+- [x] OpenAI Vision API 통합 (재료 인식) ✅
 - [ ] 백엔드 API 구축
 - [ ] 데이터베이스 연동
 - [ ] 사용자 인증 시스템
