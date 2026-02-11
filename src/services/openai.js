@@ -1,10 +1,26 @@
 import OpenAI from 'openai';
 
 // OpenAI 클라이언트 초기화
-const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true // 프로덕션에서는 백엔드에서 호출해야 함
-});
+let openai = null;
+
+// API 키가 있을 때만 초기화
+const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+console.log('🔑 API Key 확인:', apiKey ? `${apiKey.substring(0, 10)}...` : 'undefined');
+console.log('🔑 API Key 시작:', apiKey?.substring(0, 8));
+
+if (apiKey && apiKey !== 'your_openai_api_key_here' && (apiKey.startsWith('sk-') || apiKey.startsWith('sk-proj-'))) {
+  console.log('✅ OpenAI 클라이언트 초기화 성공');
+  openai = new OpenAI({
+    apiKey: apiKey,
+    dangerouslyAllowBrowser: true // 프로덕션에서는 백엔드에서 호출해야 함
+  });
+} else {
+  console.log('❌ OpenAI 클라이언트 초기화 실패');
+  console.log('   - API Key 존재:', !!apiKey);
+  console.log('   - 기본값 아님:', apiKey !== 'your_openai_api_key_here');
+  console.log('   - sk- 시작:', apiKey?.startsWith('sk-'));
+  console.log('   - sk-proj- 시작:', apiKey?.startsWith('sk-proj-'));
+}
 
 /**
  * 재료 기반 레시피 생성
@@ -14,6 +30,11 @@ const openai = new OpenAI({
  * @returns {Promise<Array>} 생성된 레시피 목록
  */
 export async function generateRecipes(ingredients, userProfile = {}, mode = 'flexible') {
+  if (!openai) {
+    console.warn('OpenAI API 키가 설정되지 않았습니다. 목업 데이터를 반환합니다.');
+    return getMockRecipes(ingredients);
+  }
+
   try {
     const prompt = buildRecipePrompt(ingredients, userProfile, mode);
     
@@ -50,6 +71,15 @@ export async function generateRecipes(ingredients, userProfile = {}, mode = 'fle
  * @returns {Promise<Array>} 인식된 재료 목록
  */
 export async function recognizeIngredients(imageFile) {
+  if (!openai) {
+    console.warn('OpenAI API 키가 설정되지 않았습니다. 목업 데이터를 반환합니다.');
+    return [
+      { name: '김치', confidence: 0.9 },
+      { name: '두부', confidence: 0.85 },
+      { name: '대파', confidence: 0.8 }
+    ];
+  }
+
   try {
     // 이미지를 base64로 변환
     const base64Image = await fileToBase64(imageFile);
@@ -194,6 +224,69 @@ function fileToBase64(file) {
  * API 키 유효성 검사
  */
 export function isApiKeyConfigured() {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  return apiKey && apiKey !== 'your_openai_api_key_here' && apiKey.startsWith('sk-');
+  return openai !== null;
+}
+
+/**
+ * 목업 레시피 데이터 (API 키가 없을 때 사용)
+ */
+function getMockRecipes(ingredients) {
+  return [
+    {
+      name: '김치찌개',
+      description: '한국의 대표적인 찌개 요리',
+      cuisine: '한식',
+      ingredients: [
+        { name: '김치', amount: '200', unit: 'g', isAvailable: ingredients.includes('김치') },
+        { name: '돼지고기', amount: '150', unit: 'g', isAvailable: ingredients.includes('돼지고기') },
+        { name: '두부', amount: '1/2', unit: '모', isAvailable: ingredients.includes('두부') },
+        { name: '대파', amount: '1', unit: '대', isAvailable: ingredients.includes('대파') }
+      ],
+      steps: [
+        { stepNumber: 1, instruction: '김치를 송송 썰어주세요', duration: 5 },
+        { stepNumber: 2, instruction: '돼지고기를 한입 크기로 잘라주세요', duration: 5 },
+        { stepNumber: 3, instruction: '냄비에 김치와 돼지고기를 넣고 볶아주세요', duration: 5 },
+        { stepNumber: 4, instruction: '물을 붓고 끓여주세요', duration: 10 },
+        { stepNumber: 5, instruction: '두부와 대파를 넣고 10분간 더 끓입니다', duration: 10 }
+      ],
+      nutrition: {
+        calories: 450,
+        protein: 25,
+        carbs: 35,
+        fat: 18
+      },
+      difficulty: '쉬움',
+      cookingTime: 35,
+      servings: 2,
+      image: '🍲'
+    },
+    {
+      name: '계란볶음밥',
+      description: '간단하고 맛있는 볶음밥',
+      cuisine: '한식',
+      ingredients: [
+        { name: '밥', amount: '2', unit: '공기', isAvailable: ingredients.includes('밥') },
+        { name: '계란', amount: '2', unit: '개', isAvailable: ingredients.includes('계란') },
+        { name: '양파', amount: '1/2', unit: '개', isAvailable: ingredients.includes('양파') },
+        { name: '당근', amount: '1/4', unit: '개', isAvailable: ingredients.includes('당근') }
+      ],
+      steps: [
+        { stepNumber: 1, instruction: '양파와 당근을 잘게 다져주세요', duration: 5 },
+        { stepNumber: 2, instruction: '계란을 풀어주세요', duration: 2 },
+        { stepNumber: 3, instruction: '팬에 기름을 두르고 야채를 볶아주세요', duration: 3 },
+        { stepNumber: 4, instruction: '밥을 넣고 함께 볶아주세요', duration: 5 },
+        { stepNumber: 5, instruction: '계란을 넣고 섞어가며 볶아주세요', duration: 3 }
+      ],
+      nutrition: {
+        calories: 520,
+        protein: 18,
+        carbs: 75,
+        fat: 15
+      },
+      difficulty: '쉬움',
+      cookingTime: 18,
+      servings: 2,
+      image: '🍳'
+    }
+  ];
 }
