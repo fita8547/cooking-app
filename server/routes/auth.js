@@ -150,14 +150,14 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다' });
     }
 
-    // 이메일 인증 확인
-    if (!user.isEmailVerified) {
-      return res.status(403).json({ 
-        error: '이메일 인증이 필요합니다',
-        code: 'EMAIL_NOT_VERIFIED',
-        message: '가입 시 발송된 이메일을 확인하여 인증을 완료해주세요.'
-      });
-    }
+    // 이메일 인증 확인 (임시로 비활성화)
+    // if (!user.isEmailVerified) {
+    //   return res.status(403).json({ 
+    //     error: '이메일 인증이 필요합니다',
+    //     code: 'EMAIL_NOT_VERIFIED',
+    //     message: '가입 시 발송된 이메일을 확인하여 인증을 완료해주세요.'
+    //   });
+    // }
 
     // JWT 토큰 생성
     const token = jwt.sign(
@@ -230,6 +230,28 @@ router.delete('/user/:email', async (req, res) => {
     }
     
     res.json({ success: true, message: '사용자가 삭제되었습니다' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 이메일 강제 인증 (관리자용 - 임시)
+router.post('/verify-force/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const user = await User.findOne({ email });
+    
+    if (!user) {
+      return res.status(404).json({ error: '사용자를 찾을 수 없습니다' });
+    }
+    
+    user.isEmailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationCode = undefined;
+    user.emailVerificationExpires = undefined;
+    await user.save();
+    
+    res.json({ success: true, message: '이메일 인증이 완료되었습니다' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
