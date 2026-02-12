@@ -1,12 +1,128 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback, useRef, memo } from 'react';
 import { ChefHat, Refrigerator, Heart, ShoppingCart, Clock, User, Sparkles, Flame, Leaf, AlertCircle, Camera, Plus, Minus, ThumbsUp, ThumbsDown, Calendar, TrendingUp, X, ExternalLink, Loader2 } from 'lucide-react';
 import { generateRecipes, recognizeIngredients, isApiKeyConfigured } from './services/openai';
+
+// 한글 입력 문제 해결을 위한 독립적인 입력 컴포넌트
+const IngredientInput = memo(({ onAdd, onButtonClick }) => {
+  const [value, setValue] = useState('');
+  const [isComposing, setIsComposing] = useState(false);
+  const inputRef = useRef(null);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !isComposing) {
+      e.preventDefault();
+      const trimmed = value.trim();
+      if (trimmed) {
+        onAdd(trimmed);
+        setValue('');
+      }
+    }
+  };
+
+  const handleButtonClick = () => {
+    const trimmed = value.trim();
+    if (trimmed) {
+      onAdd(trimmed);
+      setValue('');
+    }
+  };
+
+  // 부모에게 버튼 클릭 핸들러 전달
+  React.useEffect(() => {
+    if (onButtonClick) {
+      onButtonClick.current = handleButtonClick;
+    }
+  }, [value, onButtonClick]);
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onCompositionStart={() => setIsComposing(true)}
+      onCompositionEnd={() => setIsComposing(false)}
+      onKeyDown={handleKeyDown}
+      placeholder="재료를 입력하세요 (예: 김치, 돼지고기)"
+      className="input-field"
+      autoComplete="off"
+    />
+  );
+});
+
+// 일반 텍스트 입력 컴포넌트 (한글 입력 문제 해결 - 완전 독립형)
+const TextInput = memo(({ type = "text", placeholder, initialValue = "", onValueChange, required, autoComplete = "off", name }) => {
+  const [value, setValue] = useState(initialValue);
+  const [isComposing, setIsComposing] = useState(false);
+  const updateTimeoutRef = useRef(null);
+
+  const handleChange = (e) => {
+    setValue(e.target.value);
+  };
+
+  const handleBlur = (e) => {
+    // 포커스를 잃을 때 부모에게 값 전달
+    if (onValueChange) {
+      onValueChange(e.target.value);
+    }
+  };
+
+  const handleCompositionEnd = (e) => {
+    setIsComposing(false);
+    setValue(e.target.value);
+  };
+
+  return (
+    <input
+      type={type}
+      name={name}
+      placeholder={placeholder}
+      className="input-field"
+      value={value}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      onCompositionStart={() => setIsComposing(true)}
+      onCompositionEnd={handleCompositionEnd}
+      required={required}
+      autoComplete={autoComplete}
+      tabIndex={0}
+    />
+  );
+});
+
+// 숫자 입력 컴포넌트 (한글 입력 문제 해결)
+const NumberInput = memo(({ placeholder, value, onChange, name }) => {
+  const [localValue, setLocalValue] = useState(value || '');
+
+  const handleChange = (e) => {
+    setLocalValue(e.target.value);
+  };
+
+  const handleBlur = () => {
+    if (onChange) {
+      onChange(localValue);
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      name={name}
+      placeholder={placeholder}
+      className="input-field"
+      value={localValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      tabIndex={0}
+    />
+  );
+});
 
 export default function AdCookingClass() {
   const [currentPage, setCurrentPage] = useState('login');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
-  const [authToken, setAuthToken] = useState(localStorage.getItem('authToken') || null);
+  const [authToken, setAuthToken] = useState(null);
   const [authMode, setAuthMode] = useState('login');
   const [authForm, setAuthForm] = useState({
     email: '',
@@ -20,7 +136,7 @@ export default function AdCookingClass() {
   const [verificationCode, setVerificationCode] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
   const [ingredients, setIngredients] = useState([]);
-  const [inputIngredient, setInputIngredient] = useState('');
+  const inputRef = useRef(null);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [filterMode, setFilterMode] = useState('exact'); // 'exact' or 'partial'
@@ -33,6 +149,7 @@ export default function AdCookingClass() {
     goal: '',
     disease: ''
   });
+  const [healthProfileCompleted, setHealthProfileCompleted] = useState(false); // 건강정보 입력 완료 여부
   const [mealHistory, setMealHistory] = useState([
     { id: 1, date: '2026-02-10', meal: '김치찌개', rating: 'like', calories: 450 },
     { id: 2, date: '2026-02-09', meal: '샐러드 볼', rating: 'like', calories: 320 },
@@ -40,6 +157,7 @@ export default function AdCookingClass() {
   ]);
   const [showImageUpload, setShowImageUpload] = useState(false);
   const [recognizedIngredients, setRecognizedIngredients] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
   
   // AI 관련 상태
   const [aiRecipes, setAiRecipes] = useState([]);
@@ -55,14 +173,16 @@ export default function AdCookingClass() {
     setAuthError('');
     setAuthLoading(true);
 
+    // FormData에서 값 읽기
+    const formData = new FormData(e.target);
+    const email = formData.get('email');
+    const password = formData.get('password');
+
     try {
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: authForm.email,
-          password: authForm.password
-        })
+        body: JSON.stringify({ email, password })
       });
 
       const data = await response.json();
@@ -72,7 +192,15 @@ export default function AdCookingClass() {
         setUser(data.user);
         setIsLoggedIn(true);
         localStorage.setItem('authToken', data.token);
-        setCurrentPage('home');
+        
+        // 건강정보가 이미 있으면 바로 추천 페이지로, 없으면 건강정보 입력 페이지로
+        if (data.user.healthProfile && data.user.healthProfile.age) {
+          setHealthProfile(data.user.healthProfile);
+          setHealthProfileCompleted(true);
+          setCurrentPage('recommend');
+        } else {
+          setCurrentPage('healthSetup');
+        }
       } else {
         setAuthError(data.error || '로그인에 실패했습니다');
       }
@@ -88,12 +216,19 @@ export default function AdCookingClass() {
     e.preventDefault();
     setAuthError('');
 
-    if (authForm.password !== authForm.confirmPassword) {
+    // FormData에서 값 읽기
+    const formData = new FormData(e.target);
+    const name = formData.get('name');
+    const email = formData.get('email');
+    const password = formData.get('password');
+    const confirmPassword = formData.get('confirmPassword');
+
+    if (password !== confirmPassword) {
       setAuthError('비밀번호가 일치하지 않습니다');
       return;
     }
 
-    if (authForm.password.length < 6) {
+    if (password.length < 6) {
       setAuthError('비밀번호는 최소 6자 이상이어야 합니다');
       return;
     }
@@ -104,11 +239,7 @@ export default function AdCookingClass() {
       const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: authForm.email,
-          password: authForm.password,
-          name: authForm.name
-        })
+        body: JSON.stringify({ email, password, name })
       });
 
       const data = await response.json();
@@ -118,7 +249,9 @@ export default function AdCookingClass() {
         setUser(data.user);
         setIsLoggedIn(true);
         localStorage.setItem('authToken', data.token);
-        setCurrentPage('home');
+        
+        // 회원가입 후에는 항상 건강정보 입력 페이지로
+        setCurrentPage('healthSetup');
       } else {
         setAuthError(data.error || '회원가입에 실패했습니다');
       }
@@ -264,21 +397,60 @@ export default function AdCookingClass() {
     }
   ];
 
-  const addIngredient = () => {
-    if (inputIngredient.trim() && !ingredients.includes(inputIngredient.trim())) {
-      setIngredients([...ingredients, inputIngredient.trim()]);
-      setInputIngredient('');
+  const addIngredient = useCallback((ingredient) => {
+    if (ingredient && !ingredients.includes(ingredient)) {
+      setIngredients(prev => [...prev, ingredient]);
     }
-  };
+  }, [ingredients]);
 
-  const removeIngredient = (ing) => {
-    setIngredients(ingredients.filter(i => i !== ing));
+  const removeIngredient = useCallback((ing) => {
+    setIngredients(prev => prev.filter(i => i !== ing));
+  }, []);
+
+  // 이미지 리사이징 함수 (최대 1024px, 품질 80%)
+  const resizeImage = (file, maxWidth = 1024, quality = 0.8) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // 비율 유지하면서 리사이징
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // base64로 변환
+          const resizedBase64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(resizedBase64);
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   };
 
   // 이미지 업로드 후 재료 인식 (OpenAI Vision API 사용)
   const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0] || e.dataTransfer?.files?.[0];
     if (!file) return;
+
+    // 이미지 파일 확인
+    if (!file.type.startsWith('image/')) {
+      alert('이미지 파일만 업로드할 수 있습니다.');
+      return;
+    }
 
     // API 키 확인
     if (!isApiKeyConfigured()) {
@@ -290,7 +462,17 @@ export default function AdCookingClass() {
     setError(null);
 
     try {
-      const detected = await recognizeIngredients(file);
+      // 이미지 리사이징 (파일 크기 줄이기)
+      console.log('원본 이미지 크기:', (file.size / 1024 / 1024).toFixed(2), 'MB');
+      const resizedImage = await resizeImage(file);
+      console.log('리사이징 후 크기:', (resizedImage.length / 1024 / 1024).toFixed(2), 'MB');
+
+      // 리사이징된 이미지를 File 객체로 변환
+      const response = await fetch(resizedImage);
+      const blob = await response.blob();
+      const resizedFile = new File([blob], file.name, { type: 'image/jpeg' });
+
+      const detected = await recognizeIngredients(resizedFile);
       const ingredientNames = detected
         .filter(item => item.confidence > 0.5) // 신뢰도 50% 이상만
         .map(item => item.name);
@@ -304,6 +486,34 @@ export default function AdCookingClass() {
     } finally {
       setIsRecognizingImage(false);
     }
+  };
+
+  // 드래그 앤 드롭 핸들러
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    if (isRecognizingImage) return;
+    
+    handleImageUpload(e);
   };
 
   const confirmRecognizedIngredient = (ing) => {
@@ -498,60 +708,230 @@ export default function AdCookingClass() {
     }
   };
 
-  // 홈 페이지
-  const HomePage = () => (
-    <div className="home-page">
-      <div className="hero-section">
-        <div className="hero-text">
-          <h1 className="hero-title">
-            냉장고 재료로<br />
-            <span className="gradient-text">맛있는 요리</span>를<br />
-            만들어보세요
-          </h1>
-          <p className="hero-subtitle">AI가 당신의 재료를 분석하고 최적의 레시피를 추천합니다</p>
+  // 홈 페이지 - 두 개의 큰 카드 with 상태 배지
+  const HomePage = () => {
+    const lastUpdate = ingredients.length > 0 ? '어제' : '비었어요';
+    
+    return (
+      <div className="home-page">
+        <div className="hero-section">
+          <div className="hero-text">
+            <h1 className="hero-title">
+              냉장고 재료로<br />
+              <span className="gradient-text">맛있는 요리</span>를<br />
+              만들어보세요
+            </h1>
+            <p className="hero-subtitle">AI가 당신의 재료를 분석하고 최적의 레시피를 추천합니다</p>
+          </div>
+          <div className="hero-emoji">🍳</div>
         </div>
-        <div className="hero-emoji">🍳</div>
+
+        <div className="main-cards-grid">
+          {/* 우리집 냉장고 카드 */}
+          <div className="main-card" onClick={() => setCurrentPage('fridge')}>
+            <div className="card-header">
+              <div className="card-icon">
+                <Refrigerator size={48} />
+              </div>
+              <div className="card-badge">
+                <span className="badge-count">{ingredients.length}개 재료</span>
+              </div>
+            </div>
+            <h2 className="card-title">우리집 냉장고</h2>
+            <p className="card-description">냉장고에 있는 재료를 입력하고 관리하세요</p>
+            <div className="card-status">
+              <span className="status-label">최근 업데이트:</span>
+              <span className="status-value">{lastUpdate}</span>
+            </div>
+          </div>
+
+          {/* 레시피 추천 카드 */}
+          <div className="main-card" onClick={() => setCurrentPage('recommend')}>
+            <div className="card-header">
+              <div className="card-icon sparkle">
+                <Sparkles size={48} />
+              </div>
+              {ingredients.length > 0 && (
+                <div className="card-badge success">
+                  <span className="badge-ready">추천 가능</span>
+                </div>
+              )}
+            </div>
+            <h2 className="card-title">레시피 추천</h2>
+            <p className="card-description">
+              {ingredients.length === 0 
+                ? '재료를 먼저 등록하세요' 
+                : `${ingredients.length}개 재료로 추천받기`}
+            </p>
+            <div className="card-status">
+              {ingredients.length === 0 ? (
+                <span className="status-empty">👈 먼저 냉장고에 재료를 추가해주세요</span>
+              ) : (
+                <span className="status-ready">✨ 지금 바로 추천받을 수 있어요</span>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
+    );
+  };
 
-      <div className="feature-grid">
-        <div className="feature-card" onClick={() => setCurrentPage('recommend')}>
-          <div className="feature-icon">
-            <Refrigerator size={32} />
-          </div>
-          <h3>재료 기반 추천</h3>
-          <p>냉장고 속 재료로 만들 수 있는 요리를 찾아드려요</p>
+  // 우리집 냉장고 페이지 (재료 입력 및 사진 인식)
+  const FridgePage = () => {
+    const addButtonClickRef = useRef(null);
+    
+    return (
+      <div className="fridge-page">
+        <h2 className="page-title">우리집 냉장고</h2>
+        <p className="page-subtitle">냉장고 사진을 찍어서 재료를 자동으로 인식하거나 직접 입력하세요</p>
+        
+        {/* 사진 촬영 버튼 */}
+        <div className="camera-section">
+          <button onClick={() => setShowImageUpload(true)} className="btn-camera-large">
+            <Camera size={32} />
+            <span>냉장고 사진 찍기</span>
+            <p className="camera-hint">AI가 자동으로 재료를 인식해요</p>
+          </button>
         </div>
 
-        <div className="feature-card" onClick={() => setCurrentPage('health')}>
-          <div className="feature-icon">
-            <Heart size={32} />
+        {/* 이미지 업로드 모달 */}
+        {showImageUpload && (
+          <div className="modal-overlay" onClick={() => !isRecognizingImage && setShowImageUpload(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>냉장고 촬영하기</h3>
+                {!isRecognizingImage && (
+                  <button onClick={() => setShowImageUpload(false)} className="modal-close">
+                    <X size={24} />
+                  </button>
+                )}
+              </div>
+              <div 
+                className={`upload-area ${isDragging ? 'dragging' : ''}`}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+              >
+                {isRecognizingImage ? (
+                  <>
+                    <Loader2 size={64} className="spinning" style={{ color: '#6c5ce7' }} />
+                    <p style={{ marginTop: '16px', fontWeight: '600' }}>AI가 재료를 인식하는 중...</p>
+                    <p style={{ fontSize: '14px', color: '#636e72' }}>잠시만 기다려주세요</p>
+                  </>
+                ) : (
+                  <>
+                    <Camera size={64} />
+                    <p style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
+                      {isDragging ? '여기에 이미지를 놓으세요' : '냉장고 사진을 업로드하세요'}
+                    </p>
+                    <p style={{ fontSize: '14px', color: '#636e72', marginBottom: '24px' }}>
+                      이미지를 드래그하거나 클릭해서 선택하세요
+                    </p>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleImageUpload}
+                      style={{ display: 'none' }}
+                      id="camera-input"
+                    />
+                    <label htmlFor="camera-input" className="btn-upload">
+                      사진 선택
+                    </label>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-          <h3>건강 식단</h3>
-          <p>목표에 맞는 맞춤형 식단을 설계해드려요</p>
+        )}
+
+        {/* 인식된 재료 */}
+        {recognizedIngredients.length > 0 && (
+          <div className="recognized-section">
+            <h3>🎯 인식된 재료</h3>
+            <p className="section-hint">추가하려는 재료를 선택하세요</p>
+            <div className="recognized-list">
+              {recognizedIngredients.map((ing, idx) => (
+                <div key={idx} className="recognized-item">
+                  <span>{ing}</span>
+                  <button onClick={() => {
+                    addIngredient(ing);
+                    setRecognizedIngredients(prev => prev.filter((_, i) => i !== idx));
+                  }} className="btn-add-recognized">
+                    <Plus size={16} />
+                    추가
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button 
+              onClick={() => {
+                recognizedIngredients.forEach(ing => addIngredient(ing));
+                setRecognizedIngredients([]);
+              }}
+              className="btn-add-all"
+            >
+              모두 추가하기
+            </button>
+          </div>
+        )}
+
+        {/* 직접 입력 */}
+        <div className="manual-input-section">
+          <h3>✏️ 직접 입력하기</h3>
+          <div className="input-group">
+            <IngredientInput onAdd={addIngredient} onButtonClick={addButtonClickRef} />
+            <button onClick={() => addButtonClickRef.current?.()} className="btn-add">
+              추가
+            </button>
+          </div>
         </div>
 
-        <div className="feature-card">
-          <div className="feature-icon">
-            <ShoppingCart size={32} />
+        {/* 내 재료 목록 */}
+        {ingredients.length > 0 && (
+          <div className="my-ingredients-section">
+            <div className="section-header">
+              <h3>📦 내 재료 ({ingredients.length}개)</h3>
+              <button onClick={() => setIngredients([])} className="btn-clear">
+                전체 삭제
+              </button>
+            </div>
+            <div className="ingredient-tags">
+              {ingredients.map((ing, idx) => (
+                <div key={idx} className="ingredient-tag">
+                  {ing}
+                  <button onClick={() => removeIngredient(ing)} className="remove-btn">
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button 
+              onClick={() => setCurrentPage('recommend')} 
+              className="btn-primary btn-large"
+            >
+              <Sparkles size={20} />
+              이 재료로 레시피 추천받기
+            </button>
           </div>
-          <h3>재료 구매</h3>
-          <p>필요한 재료를 바로 장바구니에 담아보세요</p>
-        </div>
+        )}
 
-        <div className="feature-card">
-          <div className="feature-icon">
-            <Clock size={32} />
+        {ingredients.length === 0 && recognizedIngredients.length === 0 && (
+          <div className="empty-state">
+            <Refrigerator size={80} style={{ color: '#dfe6e9', marginBottom: '16px' }} />
+            <h3>냉장고가 비어있어요</h3>
+            <p>사진을 찍거나 직접 입력해서 재료를 추가해보세요</p>
           </div>
-          <h3>식사 기록</h3>
-          <p>내 식사 히스토리를 저장하고 분석해요</p>
-        </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   // 재료 추천 페이지
   const RecommendPage = () => {
-    const recommendedRecipes = getRecommendedRecipes();
+    const recommendedRecipes = useMemo(() => getRecommendedRecipes(), [ingredients, aiRecipes, filterMode]);
+    const addButtonClickRef = useRef(null);
     
     return (
       <div className="recommend-page">
@@ -559,19 +939,8 @@ export default function AdCookingClass() {
         
         <div className="ingredient-input-section">
           <div className="input-group">
-            <input
-              type="text"
-              value={inputIngredient}
-              onChange={(e) => setInputIngredient(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                  addIngredient();
-                }
-              }}
-              placeholder="재료를 입력하세요 (예: 김치, 돼지고기)"
-              className="input-field"
-            />
-            <button onClick={addIngredient} className="btn-add">추가</button>
+            <IngredientInput onAdd={addIngredient} onButtonClick={addButtonClickRef} />
+            <button onClick={() => addButtonClickRef.current?.()} className="btn-add">추가</button>
             <button onClick={() => setShowImageUpload(true)} className="btn-camera">
               <Camera size={20} />
               촬영
@@ -590,7 +959,13 @@ export default function AdCookingClass() {
                     </button>
                   )}
                 </div>
-                <div className="upload-area">
+                <div 
+                  className={`upload-area ${isDragging ? 'dragging' : ''}`}
+                  onDragEnter={handleDragEnter}
+                  onDragLeave={handleDragLeave}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                >
                   {isRecognizingImage ? (
                     <>
                       <Loader2 size={64} className="spinning" style={{ color: '#6c5ce7' }} />
@@ -600,7 +975,12 @@ export default function AdCookingClass() {
                   ) : (
                     <>
                       <Camera size={64} />
-                      <p>냉장고 사진을 업로드하세요</p>
+                      <p style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
+                        {isDragging ? '여기에 이미지를 놓으세요' : '냉장고 사진을 업로드하세요'}
+                      </p>
+                      <p style={{ fontSize: '14px', color: '#636e72', marginBottom: '16px' }}>
+                        드래그 앤 드롭 또는 클릭하여 업로드
+                      </p>
                       <label className="btn-primary" style={{marginTop: '16px', cursor: 'pointer'}}>
                         사진 선택
                         <input 
@@ -856,6 +1236,139 @@ export default function AdCookingClass() {
               </div>
             </div>
           )}
+        </div>
+      </div>
+    );
+  };
+
+  // 건강정보 초기 설정 페이지 (로그인 직후)
+  const HealthSetupPage = () => {
+    const handleSaveHealthProfile = () => {
+      // 건강정보 저장 (나중에 백엔드 연동)
+      setHealthProfileCompleted(true);
+      setCurrentPage('recommend');
+    };
+
+    const handleSkip = () => {
+      // 건강정보 입력 건너뛰기
+      setCurrentPage('recommend');
+    };
+
+    return (
+      <div className="health-setup-page">
+        <div className="setup-container">
+          <h2 className="page-title">건강 정보 입력</h2>
+          <p className="setup-description">
+            더 정확한 맞춤 레시피 추천을 위해 건강 정보를 입력해주세요.
+            <br />
+            나중에 언제든지 수정할 수 있습니다.
+          </p>
+          
+          <div className="health-form">
+            <div className="form-row">
+              <div className="form-group">
+                <label>나이</label>
+                <NumberInput
+                  name="age"
+                  placeholder="30"
+                  value={healthProfile.age}
+                  onChange={(value) => setHealthProfile(prev => ({...prev, age: value}))}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>성별</label>
+                <select 
+                  className="input-field"
+                  value={healthProfile.gender}
+                  onChange={(e) => setHealthProfile(prev => ({...prev, gender: e.target.value}))}
+                  tabIndex={0}
+                >
+                  <option value="">선택하세요</option>
+                  <option value="male">남성</option>
+                  <option value="female">여성</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>키 (cm)</label>
+                <NumberInput
+                  name="height"
+                  placeholder="170"
+                  value={healthProfile.height}
+                  onChange={(value) => setHealthProfile(prev => ({...prev, height: value}))}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>몸무게 (kg)</label>
+                <NumberInput
+                  name="weight"
+                  placeholder="65"
+                  value={healthProfile.weight}
+                  onChange={(value) => setHealthProfile(prev => ({...prev, weight: value}))}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>목표</label>
+              <select 
+                className="input-field"
+                value={healthProfile.goal}
+                onChange={(e) => setHealthProfile({...healthProfile, goal: e.target.value})}
+              >
+                <option value="">선택하세요</option>
+                <option value="lose">체중 감량</option>
+                <option value="maintain">체중 유지</option>
+                <option value="gain">체중 증가</option>
+                <option value="muscle">근육 증가</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>알레르기 (선택사항)</label>
+              <div className="allergy-options">
+                {['우유', '계란', '땅콩', '갑각류', '밀', '대두'].map(item => (
+                  <label key={item} className="checkbox-label">
+                    <input 
+                      type="checkbox"
+                      checked={healthProfile.allergies.includes(item)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setHealthProfile({
+                            ...healthProfile,
+                            allergies: [...healthProfile.allergies, item]
+                          });
+                        } else {
+                          setHealthProfile({
+                            ...healthProfile,
+                            allergies: healthProfile.allergies.filter(a => a !== item)
+                          });
+                        }
+                      }}
+                    />
+                    {item}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="setup-buttons">
+              <button onClick={handleSkip} className="btn-skip-subtle">
+                Skip
+              </button>
+              <button onClick={handleSaveHealthProfile} className="btn-confirm">
+                확인
+              </button>
+            </div>
+
+            <p className="profile-notice">
+              💡 언제든 프로필에서 수정 가능해요
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -1158,7 +1671,8 @@ export default function AdCookingClass() {
     </nav>
   );
 
-  if (!isLoggedIn) {
+  // 로그인 페이지
+  const LoginPage = () => {
     return (
       <>
         <style>{`
@@ -1264,23 +1778,6 @@ export default function AdCookingClass() {
             box-shadow: 0 10px 25px rgba(255, 107, 107, 0.3);
           }
 
-          .btn-secondary {
-            background: white;
-            color: #ff6b6b;
-            border: 2px solid #ff6b6b;
-            padding: 14px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-family: inherit;
-          }
-
-          .btn-secondary:hover {
-            background: #fff5f5;
-          }
-
           .auth-tabs {
             display: flex;
             gap: 8px;
@@ -1340,6 +1837,22 @@ export default function AdCookingClass() {
             opacity: 0.6;
             cursor: not-allowed;
           }
+
+          .test-account-info {
+            background: #e3f2fd;
+            border: 1px solid #90caf9;
+            color: #1565c0;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            line-height: 1.5;
+          }
+
+          .test-account-info strong {
+            display: block;
+            margin-bottom: 4px;
+          }
         `}</style>
         <div className="login-container">
           <div className="login-card">
@@ -1348,6 +1861,14 @@ export default function AdCookingClass() {
               <h1>애드쿠킹클래스</h1>
               <p>AI가 당신의 요리를 돕습니다</p>
             </div>
+
+            {authMode === 'login' && (
+              <div className="test-account-info">
+                <strong>🔑 테스트 계정</strong>
+                이메일: test@example.com<br />
+                비밀번호: test1234
+              </div>
+            )}
             
             <div className="auth-tabs">
               <button 
@@ -1379,42 +1900,41 @@ export default function AdCookingClass() {
             
             <form className="login-form" onSubmit={authMode === 'login' ? handleLogin : handleRegister}>
               {authMode === 'register' && (
-                <input 
+                <TextInput
                   type="text" 
-                  placeholder="이름" 
-                  className="input-field"
-                  value={authForm.name}
-                  onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
+                  name="name"
+                  placeholder="이름"
+                  initialValue=""
                   required
                 />
               )}
               
-              <input 
-                type="email" 
-                placeholder="이메일" 
-                className="input-field"
-                value={authForm.email}
-                onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
+              <TextInput
+                type="email"
+                name="email"
+                placeholder="이메일"
+                initialValue=""
                 required
+                autoComplete="email"
               />
               
-              <input 
-                type="password" 
-                placeholder="비밀번호" 
-                className="input-field"
-                value={authForm.password}
-                onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
+              <TextInput
+                type="password"
+                name="password"
+                placeholder="비밀번호"
+                initialValue=""
                 required
+                autoComplete="current-password"
               />
               
               {authMode === 'register' && (
-                <input 
-                  type="password" 
-                  placeholder="비밀번호 확인" 
-                  className="input-field"
-                  value={authForm.confirmPassword}
-                  onChange={(e) => setAuthForm({...authForm, confirmPassword: e.target.value})}
+                <TextInput
+                  type="password"
+                  name="confirmPassword"
+                  placeholder="비밀번호 확인"
+                  initialValue=""
                   required
+                  autoComplete="new-password"
                 />
               )}
               
@@ -1440,6 +1960,10 @@ export default function AdCookingClass() {
         </div>
       </>
     );
+  };
+
+  if (!isLoggedIn) {
+    return <LoginPage />;
   }
 
   return (
@@ -1589,6 +2113,135 @@ export default function AdCookingClass() {
           gap: 24px;
         }
 
+        /* Main Cards Grid - 두 개의 큰 카드 */
+        .main-cards-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 32px;
+          max-width: 1000px;
+          margin: 0 auto;
+        }
+
+        .main-card {
+          background: white;
+          padding: 40px;
+          border-radius: 24px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          border: 3px solid #f1f3f4;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .main-card:hover {
+          transform: translateY(-8px);
+          box-shadow: 0 20px 50px rgba(0,0,0,0.12);
+          border-color: #ff6b6b;
+        }
+
+        .card-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 24px;
+        }
+
+        .card-icon {
+          width: 80px;
+          height: 80px;
+          border-radius: 20px;
+          background: linear-gradient(135deg, #ff6b6b 0%, #ff8787 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+        }
+
+        .card-icon.sparkle {
+          background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+        }
+
+        .card-badge {
+          background: #fff5f5;
+          color: #ff6b6b;
+          padding: 8px 16px;
+          border-radius: 20px;
+          font-size: 14px;
+          font-weight: 600;
+        }
+
+        .card-badge.success {
+          background: #e8f5e9;
+          color: #4caf50;
+        }
+
+        .badge-count {
+          display: block;
+        }
+
+        .badge-ready {
+          display: block;
+        }
+
+        .card-title {
+          font-size: 28px;
+          font-weight: 800;
+          color: #2d3436;
+          margin-bottom: 12px;
+        }
+
+        .card-description {
+          font-size: 16px;
+          color: #636e72;
+          line-height: 1.6;
+          margin-bottom: 24px;
+          min-height: 48px;
+        }
+
+        .card-status {
+          padding-top: 20px;
+          border-top: 2px solid #f1f3f4;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+        }
+
+        .status-label {
+          color: #95a5a6;
+          font-weight: 500;
+        }
+
+        .status-value {
+          color: #2d3436;
+          font-weight: 600;
+        }
+
+        .status-empty {
+          color: #95a5a6;
+          font-weight: 500;
+        }
+
+        .status-ready {
+          color: #4caf50;
+          font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+          .main-cards-grid {
+            grid-template-columns: 1fr;
+            gap: 20px;
+          }
+
+          .main-card {
+            padding: 32px;
+          }
+
+          .card-title {
+            font-size: 24px;
+          }
+        }
+
         .feature-card {
           background: white;
           padding: 32px;
@@ -1634,6 +2287,210 @@ export default function AdCookingClass() {
           max-width: 1200px;
           margin: 0 auto;
           padding: 40px 20px;
+        }
+
+        /* Fridge Page */
+        .fridge-page {
+          max-width: 900px;
+          margin: 0 auto;
+          padding: 40px 20px;
+        }
+
+        .page-subtitle {
+          font-size: 16px;
+          color: #636e72;
+          margin-bottom: 40px;
+          text-align: center;
+        }
+
+        .camera-section {
+          margin-bottom: 40px;
+        }
+
+        .btn-camera-large {
+          width: 100%;
+          background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+          color: white;
+          border: none;
+          padding: 48px 32px;
+          border-radius: 24px;
+          font-size: 20px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          font-family: inherit;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 12px;
+          box-shadow: 0 8px 24px rgba(108, 92, 231, 0.3);
+        }
+
+        .btn-camera-large:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 32px rgba(108, 92, 231, 0.4);
+        }
+
+        .camera-hint {
+          font-size: 14px;
+          font-weight: 500;
+          opacity: 0.9;
+          margin: 0;
+        }
+
+        .recognized-section {
+          background: #f0f3ff;
+          padding: 32px;
+          border-radius: 20px;
+          margin-bottom: 32px;
+          border: 2px solid #6c5ce7;
+        }
+
+        .recognized-section h3 {
+          font-size: 20px;
+          font-weight: 700;
+          color: #2d3436;
+          margin-bottom: 8px;
+        }
+
+        .section-hint {
+          font-size: 14px;
+          color: #636e72;
+          margin-bottom: 20px;
+        }
+
+        .recognized-list {
+          display: grid;
+          gap: 12px;
+          margin-bottom: 20px;
+        }
+
+        .recognized-item {
+          background: white;
+          padding: 16px 20px;
+          border-radius: 12px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 16px;
+          font-weight: 500;
+          color: #2d3436;
+        }
+
+        .btn-add-recognized {
+          background: #6c5ce7;
+          color: white;
+          border: none;
+          padding: 8px 16px;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .btn-add-recognized:hover {
+          background: #5f4dd1;
+        }
+
+        .btn-add-all {
+          width: 100%;
+          background: #6c5ce7;
+          color: white;
+          border: none;
+          padding: 14px;
+          border-radius: 12px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .btn-add-all:hover {
+          background: #5f4dd1;
+        }
+
+        .manual-input-section {
+          background: white;
+          padding: 32px;
+          border-radius: 20px;
+          margin-bottom: 32px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .manual-input-section h3 {
+          font-size: 20px;
+          font-weight: 700;
+          color: #2d3436;
+          margin-bottom: 20px;
+        }
+
+        .my-ingredients-section {
+          background: white;
+          padding: 32px;
+          border-radius: 20px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .my-ingredients-section h3 {
+          font-size: 20px;
+          font-weight: 700;
+          color: #2d3436;
+        }
+
+        .section-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 20px;
+        }
+
+        .btn-clear {
+          background: transparent;
+          color: #ff6b6b;
+          border: 1px solid #ff6b6b;
+          padding: 8px 16px;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .btn-clear:hover {
+          background: #fff5f5;
+        }
+
+        .btn-large {
+          width: 100%;
+          margin-top: 24px;
+          padding: 18px;
+          font-size: 17px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+
+        .empty-state {
+          text-align: center;
+          padding: 80px 20px;
+          color: #95a5a6;
+        }
+
+        .empty-state h3 {
+          font-size: 24px;
+          font-weight: 700;
+          color: #636e72;
+          margin-bottom: 12px;
+        }
+
+        .empty-state p {
+          font-size: 16px;
+          color: #95a5a6;
         }
 
         .page-title {
@@ -1986,12 +2843,101 @@ export default function AdCookingClass() {
           padding: 40px 20px;
         }
 
+        /* Health Setup Page */
+        .health-setup-page {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 40px 20px;
+          background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        }
+
+        .setup-container {
+          background: white;
+          border-radius: 24px;
+          padding: 48px;
+          max-width: 600px;
+          width: 100%;
+          box-shadow: 0 20px 60px rgba(252, 182, 159, 0.3);
+        }
+
+        .setup-description {
+          text-align: center;
+          color: #636e72;
+          font-size: 15px;
+          margin-bottom: 32px;
+          line-height: 1.6;
+        }
+
+        .setup-buttons {
+          display: flex;
+          gap: 16px;
+          margin-top: 32px;
+          align-items: center;
+        }
+
+        .btn-skip-subtle {
+          flex: 0.6;
+          background: transparent;
+          color: #95a5a6;
+          border: 2px solid #e1e8ed;
+          padding: 16px 32px;
+          border-radius: 12px;
+          font-size: 15px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          font-family: inherit;
+        }
+
+        .btn-skip-subtle:hover {
+          color: #636e72;
+          border-color: #bdc3c7;
+          background: #f8f9fa;
+        }
+
+        .btn-confirm {
+          flex: 1;
+          background: linear-gradient(135deg, #ff6b6b 0%, #ff8787 100%);
+          color: white;
+          border: none;
+          padding: 18px 32px;
+          border-radius: 12px;
+          font-size: 17px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          font-family: inherit;
+          box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+        }
+
+        .btn-confirm:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 25px rgba(255, 107, 107, 0.4);
+        }
+
+        .profile-notice {
+          text-align: center;
+          color: #95a5a6;
+          font-size: 13px;
+          margin-top: 16px;
+          font-weight: 500;
+        }
+
         .health-form {
           background: white;
           padding: 40px;
           border-radius: 24px;
           margin-bottom: 40px;
           box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .form-row {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 16px;
+          margin-bottom: 24px;
         }
 
         .form-group {
@@ -2162,11 +3108,29 @@ export default function AdCookingClass() {
           padding: 48px;
           text-align: center;
           color: #636e72;
+          transition: all 0.3s ease;
+          cursor: pointer;
+        }
+
+        .upload-area:hover {
+          border-color: #6c5ce7;
+          background: #f8f7ff;
+        }
+
+        .upload-area.dragging {
+          border-color: #6c5ce7;
+          background: #f0edff;
+          transform: scale(1.02);
         }
 
         .upload-area svg {
           color: #b2bec3;
           margin-bottom: 16px;
+          transition: color 0.3s ease;
+        }
+
+        .upload-area.dragging svg {
+          color: #6c5ce7;
         }
 
         .upload-area p {
@@ -2715,13 +3679,35 @@ export default function AdCookingClass() {
         }
       `}</style>
 
-      <Navigation />
-      
-      {currentPage === 'home' && <HomePage />}
-      {currentPage === 'recommend' && <RecommendPage />}
-      {currentPage === 'coaching' && <CoachingPage />}
-      {currentPage === 'health' && <HealthPage />}
-      {currentPage === 'history' && <HistoryPage />}
+      {!isLoggedIn ? (
+        <LoginPage />
+      ) : (
+        <>
+          <Navigation />
+          
+          <div style={{ display: currentPage === 'healthSetup' ? 'block' : 'none' }}>
+            <HealthSetupPage />
+          </div>
+          <div style={{ display: currentPage === 'home' ? 'block' : 'none' }}>
+            <HomePage />
+          </div>
+          <div style={{ display: currentPage === 'fridge' ? 'block' : 'none' }}>
+            <FridgePage />
+          </div>
+          <div style={{ display: currentPage === 'recommend' ? 'block' : 'none' }}>
+            <RecommendPage />
+          </div>
+          <div style={{ display: currentPage === 'coaching' ? 'block' : 'none' }}>
+            <CoachingPage />
+          </div>
+          <div style={{ display: currentPage === 'health' ? 'block' : 'none' }}>
+            <HealthPage />
+          </div>
+          <div style={{ display: currentPage === 'history' ? 'block' : 'none' }}>
+            <HistoryPage />
+          </div>
+        </>
+      )}
     </>
   );
 }

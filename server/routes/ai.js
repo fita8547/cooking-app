@@ -1,24 +1,23 @@
 import express from 'express';
 import OpenAI from 'openai';
-import { authenticate } from '../middleware/auth.js';
+import { optionalAuth } from '../middleware/auth.js';
+import AICoachingService from '../services/AICoachingService.js';
 
 const router = express.Router();
 
-// OpenAI 클라이언트 초기화 (서버에서만)
-let openai = null;
-const apiKey = process.env.OPENAI_API_KEY;
-
-if (apiKey && apiKey !== 'your_openai_api_key_here') {
-  openai = new OpenAI({
-    apiKey: apiKey
-  });
-  console.log('✅ OpenAI 클라이언트 초기화 성공 (서버)');
-} else {
-  console.warn('⚠️  OpenAI API 키가 설정되지 않았습니다. 목업 데이터를 사용합니다.');
+// OpenAI 클라이언트 초기화 함수 (지연 초기화)
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  
+  if (!apiKey || apiKey === 'your_openai_api_key_here') {
+    return null;
+  }
+  
+  return new OpenAI({ apiKey });
 }
 
 // AI 레시피 생성
-router.post('/generate-recipes', authenticate, async (req, res) => {
+router.post('/generate-recipes', optionalAuth, async (req, res) => {
   try {
     const { ingredients, profile, mode } = req.body;
 
@@ -26,11 +25,15 @@ router.post('/generate-recipes', authenticate, async (req, res) => {
       return res.status(400).json({ error: '재료를 입력해주세요' });
     }
 
+    const openai = getOpenAIClient();
+    
     // OpenAI API 키가 없으면 목업 데이터 반환
     if (!openai) {
+      console.log('⚠️  OpenAI API 키 없음 - 목업 데이터 반환');
       return res.json({ recipes: getMockRecipes(ingredients) });
     }
 
+    console.log('✅ OpenAI API로 레시피 생성 중...');
     const prompt = buildRecipePrompt(ingredients, profile, mode);
     
     const response = await openai.chat.completions.create({
@@ -64,7 +67,7 @@ router.post('/generate-recipes', authenticate, async (req, res) => {
 });
 
 // AI 재료 인식
-router.post('/recognize-ingredients', authenticate, async (req, res) => {
+router.post('/recognize-ingredients', optionalAuth, async (req, res) => {
   try {
     const { imageBase64 } = req.body;
 
@@ -72,8 +75,11 @@ router.post('/recognize-ingredients', authenticate, async (req, res) => {
       return res.status(400).json({ error: '이미지를 업로드해주세요' });
     }
 
+    const openai = getOpenAIClient();
+    
     // OpenAI API 키가 없으면 목업 데이터 반환
     if (!openai) {
+      console.log('⚠️  OpenAI API 키 없음 - 목업 데이터 반환');
       return res.json({ 
         ingredients: [
           { name: '김치', confidence: 0.9 },
@@ -82,6 +88,8 @@ router.post('/recognize-ingredients', authenticate, async (req, res) => {
         ]
       });
     }
+
+    console.log('✅ OpenAI Vision API로 재료 인식 중...');
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -271,3 +279,45 @@ function getMockRecipes(ingredients) {
 }
 
 export default router;
+
+// AI 코칭 - 오늘의 인사이트
+router.post('/daily-insight', optionalAuth, async (req, res) => {
+  try {
+    const { mealHistory, healthProfile, nutritionTargets } = req.body;
+
+    const insight = await AICoachingService.generateDailyInsight(
+      mealHistory || [],
+      healthProfile,
+      nutritionTargets
+    );
+
+    res.json({ insight });
+  } catch (error) {
+    console.error('Daily insight generation error:', error);
+    res.status(500).json({ 
+      error: '인사이트 생성 중 오류가 발생했습니다',
+      message: error.message 
+    });
+  }
+});
+
+// AI 코칭 - 주간 분석
+router.post('/weekly-analysis', optionalAuth, async (req, res) => {
+  try {
+    const { mealHistory, healthProfile, nutritionTargets } = req.body;
+
+    const analysis = await AICoachingService.generateWeeklyAnalysis(
+      mealHistory || [],
+      healthProfile,
+      nutritionTargets
+    );
+
+    res.json({ analysis });
+  } catch (error) {
+    console.error('Weekly analysis generation error:', error);
+    res.status(500).json({ 
+      error: '주간 분석 생성 중 오류가 발생했습니다',
+      message: error.message 
+    });
+  }
+});

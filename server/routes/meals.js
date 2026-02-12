@@ -1,12 +1,40 @@
 import express from 'express';
 import Meal from '../models/Meal.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// 식사 기록 저장
-router.post('/', async (req, res) => {
+// 식사 기록 조회 (사용자별)
+router.get('/', authenticate, async (req, res) => {
   try {
-    const meal = new Meal(req.body);
+    const userId = req.userId;
+    const { startDate, endDate, limit = 100 } = req.query;
+    
+    const query = { userId };
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = new Date(startDate);
+      if (endDate) query.date.$lte = new Date(endDate);
+    }
+
+    const meals = await Meal.find(query)
+      .populate('recipeId')
+      .sort({ date: -1 })
+      .limit(parseInt(limit));
+
+    res.json({ meals });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 식사 기록 저장
+router.post('/', authenticate, async (req, res) => {
+  try {
+    const meal = new Meal({
+      ...req.body,
+      userId: req.userId
+    });
     await meal.save();
     res.status(201).json({ success: true, meal });
   } catch (error) {
@@ -39,7 +67,7 @@ router.get('/history', async (req, res) => {
 });
 
 // 식사 기록 수정
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticate, async (req, res) => {
   try {
     const meal = await Meal.findByIdAndUpdate(
       req.params.id,
@@ -58,7 +86,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // 식사 기록 삭제
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticate, async (req, res) => {
   try {
     const meal = await Meal.findByIdAndDelete(req.params.id);
     

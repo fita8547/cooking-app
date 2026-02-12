@@ -36,11 +36,24 @@ const mealSchema = new mongoose.Schema({
     carbs: Number,
     fat: Number
   },
-  imageUrl: String
+  imageUrl: String,
+  preferenceId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Preference'
+  },
+  wasRecommended: {
+    type: Boolean,
+    default: false
+  },
+  recommendationScore: {
+    type: Number
+  }
 }, {
   timestamps: true
 });
 
+// Indexes for efficient querying
 mealSchema.index({ userId: 1, date: -1 });
+mealSchema.index({ updatedAt: -1 });
 
 export default mongoose.model('Meal', mealSchema);

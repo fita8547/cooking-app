@@ -1,7 +1,7 @@
 // OpenAI API는 이제 백엔드에서 호출합니다
 // 프론트엔드에서는 백엔드 API를 호출하기만 하면 됩니다
 
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = '/api'; // Vite 프록시를 통해 자동으로 localhost:3000으로 전달됨
 
 /**
  * 재료 기반 레시피 생성 (백엔드 API 호출)

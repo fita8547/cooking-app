@@ -1,6 +1,8 @@
 import express from 'express';
 import Recipe from '../models/Recipe.js';
 import { authenticate, optionalAuth } from '../middleware/auth.js';
+import RecipeRecommendationService from '../services/RecipeRecommendationService.js';
+import HealthInformationRepository from '../services/HealthInformationRepository.js';
 
 const router = express.Router();
 
@@ -72,40 +74,88 @@ router.get('/search', optionalAuth, async (req, res) => {
   }
 });
 
-// 레시피 추천 (재료 기반)
-router.post('/recommend', async (req, res) => {
+// 레시피 추천 (재료 + 건강 정보 기반)
+router.post('/recommend', optionalAuth, async (req, res) => {
   try {
-    const { ingredients } = req.body;
+    const { ingredients, userId, healthProfile } = req.body;
     
-    if (!ingredients || ingredients.length === 0) {
-      return res.status(400).json({ error: '재료를 입력해주세요' });
+    // Input validation
+    if (!ingredients || !Array.isArray(ingredients)) {
+      return res.status(400).json({ error: '재료는 배열 형식이어야 합니다' });
     }
 
-    // 재료 이름으로 레시피 검색
-    const recipes = await Recipe.find({
-      'ingredients.name': { $in: ingredients }
-    }).limit(20);
+    if (ingredients.length === 0) {
+      return res.status(400).json({ error: '재료를 최소 1개 이상 입력해주세요' });
+    }
 
-    // 매칭된 재료와 부족한 재료 계산
-    const recipesWithMatch = recipes.map(recipe => {
-      const recipeIngredients = recipe.ingredients.map(i => i.name);
-      const matched = ingredients.filter(i => recipeIngredients.includes(i));
-      const missing = recipeIngredients.filter(i => !ingredients.includes(i));
-      
-      return {
-        ...recipe.toObject(),
-        matchedIngredients: matched,
-        missingIngredients: missing,
-        matchRate: (matched.length / recipeIngredients.length * 100).toFixed(0)
-      };
+    // Filter out empty strings
+    const validIngredients = ingredients.filter(ing => ing && typeof ing === 'string' && ing.trim().length > 0);
+    
+    if (validIngredients.length === 0) {
+      return res.status(400).json({ error: '유효한 재료를 입력해주세요' });
+    }
+
+    // Get user ID from auth or request body
+    const targetUserId = req.userId || userId;
+
+    // Get health profile and nutrition targets
+    let userHealthProfile = healthProfile;
+    let nutritionTargets = null;
+
+    if (targetUserId && !healthProfile) {
+      try {
+        // Fetch stored health profile
+        const profileResult = await HealthInformationRepository.getProfile(targetUserId);
+        if (profileResult.success && profileResult.data) {
+          userHealthProfile = profileResult.data;
+          nutritionTargets = profileResult.data.calculatedMetrics?.macronutrientTargets;
+        }
+      } catch (profileError) {
+        console.warn('Failed to fetch health profile:', profileError.message);
+        // Continue without health profile
+      }
+    } else if (healthProfile && healthProfile.calculatedMetrics) {
+      nutritionTargets = healthProfile.calculatedMetrics.macronutrientTargets;
+    }
+
+    // Get recommendations
+    const recommendations = await RecipeRecommendationService.recommendRecipes(
+      validIngredients,
+      userHealthProfile,
+      nutritionTargets,
+      targetUserId
+    );
+
+    // Handle empty results
+    if (!recommendations.exactMatches && !recommendations.extendedMatches) {
+      return res.json({
+        exactMatches: [],
+        extendedMatches: [],
+        nutritionTargets: nutritionTargets,
+        calculatedMetrics: userHealthProfile?.calculatedMetrics,
+        message: '추천 가능한 레시피가 없습니다. 다른 재료를 추가해보세요.'
+      });
+    }
+
+    // Response
+    res.json({
+      exactMatches: recommendations.exactMatches || [],
+      extendedMatches: recommendations.extendedMatches || [],
+      nutritionTargets: nutritionTargets,
+      calculatedMetrics: userHealthProfile?.calculatedMetrics
     });
 
-    // 매칭률 높은 순으로 정렬
-    recipesWithMatch.sort((a, b) => b.matchRate - a.matchRate);
-
-    res.json({ recipes: recipesWithMatch });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Recipe recommendation error:', error);
+    
+    // Handle specific error types
+    if (error.message.includes('OpenAI')) {
+      return res.status(503).json({ 
+        error: 'AI 서비스가 일시적으로 사용 불가능합니다. 잠시 후 다시 시도해주세요.' 
+      });
+    }
+    
+    res.status(500).json({ error: '레시피 추천 중 오류가 발생했습니다' });
   }
 });
 

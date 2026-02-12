@@ -42,6 +42,7 @@ const recipeSchema = new mongoose.Schema({
     enum: ['한식', '중식', '일식', '양식', '분식', '디저트', '기타']
   },
   tags: [String],
+  allergens: [String],  // For quick allergy filtering
   imageUrl: String,
   createdBy: {
     type: String,
@@ -51,5 +52,10 @@ const recipeSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+// Indexes for efficient querying
+recipeSchema.index({ allergens: 1 });  // Multi-key index for allergy filtering
+recipeSchema.index({ 'nutrition.calories': 1 });  // Index for calorie-based queries
+recipeSchema.index({ tags: 1 });  // Multi-key index for category filtering
 
 export default mongoose.model('Recipe', recipeSchema);
