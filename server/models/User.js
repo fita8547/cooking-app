@@ -20,6 +20,31 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isPremium: {
+    type: Boolean,
+    default: false
+  },
+  isAdmin: {
+    type: Boolean,
+    default: false
+  },
+  // Polar.sh 구독 관련 필드
+  isPro: {
+    type: Boolean,
+    default: false
+  },
+  proExpiresAt: {
+    type: Date,
+    default: null
+  },
+  polarCustomerId: {
+    type: String,
+    default: null
+  },
+  polarSubscriptionId: {
+    type: String,
+    default: null
+  },
   emailVerificationToken: String,
   emailVerificationCode: String,
   emailVerificationExpires: Date,

@@ -11,6 +11,8 @@ import ingredientsRouter from './routes/ingredients.js';
 import mealsRouter from './routes/meals.js';
 import uploadRouter from './routes/upload.js';
 import aiRouter from './routes/ai.js';
+import webhooksRouter from './routes/webhooks.js';
+import polarRouter from './routes/polar.js';
 
 dotenv.config();
 
@@ -52,6 +54,8 @@ app.use('/api/ingredients', ingredientsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/meals', mealsRouter);
 app.use('/api/upload', uploadRouter);
+app.use('/api/webhooks', webhooksRouter);
+app.use('/api/polar', polarRouter);
 
 // 404 핸들러
 app.use((req, res) => {

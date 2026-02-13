@@ -1,7 +1,7 @@
 // OpenAI API는 이제 백엔드에서 호출합니다
 // 프론트엔드에서는 백엔드 API를 호출하기만 하면 됩니다
 
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = '/api'; // Vite 프록시 사용
 
 /**
  * 재료 기반 레시피 생성 (백엔드 API 호출)
@@ -14,12 +14,18 @@ export async function generateRecipes(ingredients, userProfile = {}, mode = 'fle
   try {
     const token = localStorage.getItem('authToken');
     
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    // 토큰이 있을 때만 Authorization 헤더 추가
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const response = await fetch(`${API_BASE_URL}/ai/generate-recipes`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
+      headers,
       body: JSON.stringify({
         ingredients,
         profile: userProfile,
@@ -52,12 +58,18 @@ export async function recognizeIngredients(imageFile) {
     // 이미지를 base64로 변환
     const base64Image = await fileToBase64(imageFile);
     
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    // 토큰이 있을 때만 Authorization 헤더 추가
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const response = await fetch(`${API_BASE_URL}/ai/recognize-ingredients`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
+      headers,
       body: JSON.stringify({
         imageBase64: base64Image
       })

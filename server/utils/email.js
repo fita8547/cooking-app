@@ -2,24 +2,32 @@ import { Resend } from 'resend';
 
 let resend = null;
 if (process.env.RESEND_API_KEY) {
+  console.log('✅ Resend API 키 감지됨:', process.env.RESEND_API_KEY.substring(0, 10) + '...');
   resend = new Resend(process.env.RESEND_API_KEY);
+} else {
+  console.log('⚠️  Resend API 키가 설정되지 않았습니다.');
 }
 
 export const sendVerificationEmail = async (email, name, token, code) => {
   if (!resend) {
-    console.log('⚠️  Resend API 키가 설정되지 않았습니다. 이메일을 전송하지 않습니다.');
-    return { success: false, error: 'Resend API key not configured' };
+    console.log('\n📧 [개발 모드] 이메일 인증 코드');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`📨 수신자: ${email}`);
+    console.log(`👤 이름: ${name}`);
+    console.log(`🔑 인증 코드: ${code}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    return { success: true, message: 'Development mode - code logged to console' };
   }
 
   const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5175'}/verify-email?token=${token}`;
 
   try {
-    await resend.emails.send({
-      from: 'AdCookingClass <onboarding@resend.dev>',
+    const result = await resend.emails.send({
+      from: 'AdCookingClass <noreply@cook.com>',
       to: email,
       subject: '애드쿠킹클래스 이메일 인증',
       html: `
-        <div style="font-family: 'Pretendard', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="color: #ff6b6b; font-size: 32px; margin: 0;">🍳 애드쿠킹클래스</h1>
             <p style="color: #636e72; font-size: 16px;">AI가 당신의 요리를 돕습니다</p>
@@ -77,28 +85,39 @@ export const sendVerificationEmail = async (email, name, token, code) => {
       `
     });
     
-    return { success: true };
+    if (result.error) {
+      console.error('이메일 전송 실패:', result.error.message);
+      return { success: false, error: result.error.message };
+    }
+    
+    console.log('이메일 전송 성공:', result.data?.id);
+    return { success: true, emailId: result.data?.id };
   } catch (error) {
-    console.error('이메일 전송 실패:', error);
+    console.error('이메일 전송 예외:', error.message);
     return { success: false, error: error.message };
   }
-};
+};;
 
 export const sendPasswordResetEmail = async (email, name, token) => {
   if (!resend) {
-    console.log('⚠️  Resend API 키가 설정되지 않았습니다. 이메일을 전송하지 않습니다.');
-    return { success: false, error: 'Resend API key not configured' };
+    console.log('\n📧 [개발 모드] 비밀번호 재설정');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`📨 수신자: ${email}`);
+    console.log(`👤 이름: ${name}`);
+    console.log(`🔗 토큰: ${token}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    return { success: true, message: 'Development mode - token logged to console' };
   }
 
   const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5175'}/reset-password?token=${token}`;
 
   try {
     await resend.emails.send({
-      from: 'AdCookingClass <onboarding@resend.dev>',
+      from: 'AdCookingClass <noreply@cook.com>',
       to: email,
       subject: '애드쿠킹클래스 비밀번호 재설정',
       html: `
-        <div style="font-family: 'Pretendard', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="color: #ff6b6b; font-size: 32px; margin: 0;">🍳 애드쿠킹클래스</h1>
           </div>

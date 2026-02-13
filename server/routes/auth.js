@@ -41,9 +41,37 @@ router.post('/register', async (req, res) => {
     await user.save();
 
     // 인증 이메일 발송
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📧 이메일 전송 프로세스 시작');
+    console.log('   - 수신자:', email);
+    console.log('   - 이름:', name);
+    console.log('   - 인증 코드:', verificationCode);
+    console.log('   - RESEND_API_KEY 존재:', !!process.env.RESEND_API_KEY);
+    
     if (process.env.RESEND_API_KEY) {
-      await sendVerificationEmail(email, name, verificationToken, verificationCode);
+      console.log('📧 sendVerificationEmail 함수 호출 중...');
+      const emailResult = await sendVerificationEmail(email, name, verificationToken, verificationCode);
+      console.log('📧 이메일 전송 결과:', JSON.stringify(emailResult, null, 2));
+      
+      if (emailResult.success) {
+        console.log('✅ 이메일이 성공적으로 전송되었습니다!');
+      } else {
+        console.log('❌ 이메일 전송에 실패했습니다:', emailResult.error);
+        
+        // 이메일 전송 실패 시 터미널에 인증 코드 표시
+        if (emailResult.restricted) {
+          console.log('\n📧 [개발 모드] 이메일 인증 코드');
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log(`📨 수신자: ${email}`);
+          console.log(`👤 이름: ${name}`);
+          console.log(`🔑 인증 코드: ${verificationCode}`);
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+        }
+      }
+    } else {
+      console.log('⚠️  RESEND_API_KEY가 없어서 이메일을 전송하지 않습니다.');
     }
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     res.status(201).json({
       success: true,
@@ -105,6 +133,44 @@ router.post('/verify-code', async (req, res) => {
   }
 });
 
+// 인증 코드 재발송
+router.post('/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: '사용자를 찾을 수 없습니다' });
+    }
+
+    if (user.isEmailVerified) {
+      return res.status(400).json({ error: '이미 인증된 이메일입니다' });
+    }
+
+    // 새로운 인증 코드 생성
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    user.emailVerificationToken = verificationToken;
+    user.emailVerificationCode = verificationCode;
+    user.emailVerificationExpires = verificationExpires;
+    await user.save();
+
+    // 인증 이메일 재발송
+    if (process.env.RESEND_API_KEY) {
+      await sendVerificationEmail(user.email, user.name, verificationToken, verificationCode);
+    }
+
+    res.json({
+      success: true,
+      message: '인증 코드가 재발송되었습니다'
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // 이메일 인증
 router.get('/verify-email/:token', async (req, res) => {
   try {
@@ -136,28 +202,47 @@ router.get('/verify-email/:token', async (req, res) => {
 // 로그인
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, username } = req.body;
 
-    // 사용자 찾기
-    const user = await User.findOne({ email });
+    // 아이디 또는 이메일로 로그인 지원
+    let user;
+    if (username) {
+      // 아이디로 로그인 (username 필드가 있으면)
+      // admin 계정은 이메일로 찾기
+      if (username === 'admin') {
+        user = await User.findOne({ email: 'admin@adcookingclass.com' });
+      } else {
+        user = await User.findOne({ 
+          $or: [
+            { email: `${username}@user.local` },
+            { email: username }
+          ]
+        });
+      }
+    } else {
+      // 이메일로 로그인
+      user = await User.findOne({ email });
+    }
+
     if (!user) {
-      return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다' });
+      return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다' });
     }
 
     // 비밀번호 확인
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다' });
+      return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다' });
     }
 
-    // 이메일 인증 확인 (임시로 비활성화)
-    // if (!user.isEmailVerified) {
-    //   return res.status(403).json({ 
-    //     error: '이메일 인증이 필요합니다',
-    //     code: 'EMAIL_NOT_VERIFIED',
-    //     message: '가입 시 발송된 이메일을 확인하여 인증을 완료해주세요.'
-    //   });
-    // }
+    // 이메일 인증 확인 (관리자는 제외)
+    if (!user.isEmailVerified && !user.isAdmin) {
+      return res.status(403).json({ 
+        error: '이메일 인증이 필요합니다',
+        code: 'EMAIL_NOT_VERIFIED',
+        message: '가입 시 발송된 이메일을 확인하여 인증을 완료해주세요.',
+        email: user.email
+      });
+    }
 
     // JWT 토큰 생성
     const token = jwt.sign(
@@ -172,7 +257,9 @@ router.post('/login', async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
-        name: user.name
+        name: user.name,
+        isPremium: user.isPremium || false,
+        isAdmin: user.isAdmin || false
       }
     });
   } catch (error) {
@@ -188,12 +275,45 @@ router.get('/me', authenticate, async (req, res) => {
         id: req.user._id,
         email: req.user.email,
         name: req.user.name,
+        healthProfile: req.user.healthProfile || {},
+        preferences: req.user.preferences || {}
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 프로필 업데이트
+router.put('/profile', authenticate, async (req, res) => {
+  try {
+    const { name, healthProfile } = req.body;
+
+    if (name) {
+      req.user.name = name;
+    }
+
+    if (healthProfile) {
+      req.user.healthProfile = {
+        ...req.user.healthProfile,
+        ...healthProfile
+      };
+    }
+
+    await req.user.save();
+
+    res.json({
+      success: true,
+      user: {
+        id: req.user._id,
+        email: req.user.email,
+        name: req.user.name,
         healthProfile: req.user.healthProfile,
         preferences: req.user.preferences
       }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(400).json({ error: error.message });
   }
 });
 

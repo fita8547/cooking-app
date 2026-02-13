@@ -1,17 +1,18 @@
-import React, { useState } from 'react';
-import { ChefHat, Refrigerator, Heart, ShoppingCart, Clock, User, Sparkles, Flame, Leaf, AlertCircle, Camera, Plus, Minus, ThumbsUp, ThumbsDown, Calendar, TrendingUp, X, ExternalLink, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChefHat, Refrigerator, Heart, Clock, User, Sparkles, Flame, Leaf, AlertCircle, Camera, Plus, Minus, ThumbsUp, ThumbsDown, Calendar, TrendingUp, X, Loader2 } from 'lucide-react';
 import { generateRecipes, recognizeIngredients, isApiKeyConfigured } from './services/openai';
 
 export default function AdCookingClass() {
-  const [currentPage, setCurrentPage] = useState('login');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentPage, setCurrentPage] = useState('main'); // 'login' → 'main'으로 변경
+  const [isLoggedIn, setIsLoggedIn] = useState(true); // 공통 사용자는 로그인 없이 사용
   const [user, setUser] = useState(null);
-  const [authToken, setAuthToken] = useState(localStorage.getItem('authToken') || null);
-  const [authMode, setAuthMode] = useState('login');
+  const [authToken, setAuthToken] = useState(null);
+  const [authMode, setAuthMode] = useState('guest');
   const [authForm, setAuthForm] = useState({
     email: '',
     password: '',
     name: '',
+    username: '',
     confirmPassword: ''
   });
   const [authError, setAuthError] = useState('');
@@ -19,6 +20,7 @@ export default function AdCookingClass() {
   const [showVerificationCode, setShowVerificationCode] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
+  const [isPremiumUser, setIsPremiumUser] = useState(false); // 유료 사용자 여부
   const [ingredients, setIngredients] = useState([]);
   const [inputIngredient, setInputIngredient] = useState('');
   const [selectedRecipe, setSelectedRecipe] = useState(null);
@@ -31,7 +33,7 @@ export default function AdCookingClass() {
     weight: '',
     allergies: [],
     goal: '',
-    disease: ''
+    diseases: []
   });
   const [mealHistory, setMealHistory] = useState([
     { id: 1, date: '2026-02-10', meal: '김치찌개', rating: 'like', calories: 450 },
@@ -40,6 +42,8 @@ export default function AdCookingClass() {
   ]);
   const [showImageUpload, setShowImageUpload] = useState(false);
   const [recognizedIngredients, setRecognizedIngredients] = useState([]);
+  const [isFetchingMeals, setIsFetchingMeals] = useState(false);
+  const [mealActionLoading, setMealActionLoading] = useState(null); // 특정 식사 기록의 로딩 상태
   
   // AI 관련 상태
   const [aiRecipes, setAiRecipes] = useState([]);
@@ -47,20 +51,87 @@ export default function AdCookingClass() {
   const [isRecognizingImage, setIsRecognizingImage] = useState(false);
   const [error, setError] = useState(null);
 
-  const API_BASE_URL = 'http://localhost:3000/api';
+  const API_BASE_URL = '/api';
+
+  // 사용자 정보 가져오기
+  const fetchUserProfile = async (token) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUser(data.user);
+        setIsLoggedIn(true);
+        return true;
+      } else {
+        return false;
+      }
+    } catch (error) {
+      console.error('프로필 가져오기 실패:', error);
+      return false;
+    }
+  };
+
+  // 로그인 후 식사 기록 불러오기
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchMealHistory();
+    }
+  }, [isLoggedIn]);
 
   // 로그인
   const handleLogin = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setAuthError('');
     setAuthLoading(true);
+    setAuthMode('login');
 
     try {
+      // 관리자 계정 확인
+      if (authForm.username === 'admin' && authForm.password === 'admin1234') {
+        const adminUser = {
+          name: '관리자',
+          username: 'admin',
+          email: 'admin@adcookingclass.com',
+          isPremium: true,
+          isAdmin: true
+        };
+        setUser(adminUser);
+        setIsLoggedIn(true);
+        setIsPremiumUser(true);
+        setCurrentPage('home');
+        setAuthLoading(false);
+        return;
+      }
+
+      // 게스트 계정 확인
+      const guestUser = localStorage.getItem('guestUser');
+      const guestPassword = localStorage.getItem('guestPassword');
+      
+      if (guestUser && guestPassword) {
+        const guest = JSON.parse(guestUser);
+        // 아이디와 비밀번호가 모두 일치하는지 확인
+        if (guest.username === authForm.username && guestPassword === authForm.password) {
+          // 게스트 계정으로 로그인 (저장된 프로필 정보 포함)
+          setUser(guest);
+          setIsLoggedIn(true);
+          setIsPremiumUser(false); // 게스트는 무료 사용자
+          setCurrentPage('home');
+          setAuthLoading(false);
+          return;
+        }
+      }
+
+      // 서버 로그인 시도
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: authForm.email,
+          username: authForm.username,
           password: authForm.password
         })
       });
@@ -69,15 +140,25 @@ export default function AdCookingClass() {
 
       if (response.ok) {
         setAuthToken(data.token);
-        setUser(data.user);
-        setIsLoggedIn(true);
         localStorage.setItem('authToken', data.token);
+        
+        // 전체 프로필 정보 가져오기
+        await fetchUserProfile(data.token);
+        
+        // 서버 사용자는 유료 사용자로 간주
+        setIsPremiumUser(true);
         setCurrentPage('home');
       } else {
-        setAuthError(data.error || '로그인에 실패했습니다');
+        if (data.code === 'EMAIL_NOT_VERIFIED') {
+          setPendingEmail(data.email);
+          setShowVerificationCode(true);
+          setAuthError('');
+        } else {
+          setAuthError(data.error || '아이디 또는 비밀번호가 올바르지 않습니다');
+        }
       }
     } catch (error) {
-      setAuthError('서버 연결에 실패했습니다');
+      setAuthError('아이디 또는 비밀번호가 올바르지 않습니다');
     } finally {
       setAuthLoading(false);
     }
@@ -114,15 +195,15 @@ export default function AdCookingClass() {
       const data = await response.json();
 
       if (response.ok) {
-        setAuthToken(data.token);
-        setUser(data.user);
-        setIsLoggedIn(true);
-        localStorage.setItem('authToken', data.token);
-        setCurrentPage('home');
+        setPendingEmail(authForm.email);
+        setShowVerificationCode(true);
+        setAuthError('');
       } else {
+        console.error('회원가입 에러:', data);
         setAuthError(data.error || '회원가입에 실패했습니다');
       }
     } catch (error) {
+      console.error('회원가입 예외:', error);
       setAuthError('서버 연결에 실패했습니다');
     } finally {
       setAuthLoading(false);
@@ -134,13 +215,138 @@ export default function AdCookingClass() {
     setAuthToken(null);
     setUser(null);
     setIsLoggedIn(false);
+    setIsPremiumUser(false);
     localStorage.removeItem('authToken');
+    localStorage.removeItem('guestUser');
+    localStorage.removeItem('guestPassword');
     setCurrentPage('login');
+    setAuthMode('login');
+    setAuthForm({
+      email: '',
+      password: '',
+      name: '',
+      username: '',
+      confirmPassword: ''
+    });
+  };
+
+  // 게스트로 시작
+  const handleGuestStart = (e) => {
+    if (e) e.preventDefault();
+    setAuthMode('guest');
+    
+    if (!authForm.username || !authForm.password) {
+      setAuthError('아이디와 비밀번호를 입력해주세요');
+      return;
+    }
+
+    // 관리자 아이디 사용 불가
+    if (authForm.username === 'admin') {
+      setAuthError('이 아이디는 사용할 수 없습니다');
+      return;
+    }
+
+    // 기존 게스트 계정 중복 체크
+    const existingGuestUser = localStorage.getItem('guestUser');
+    if (existingGuestUser) {
+      const existingGuest = JSON.parse(existingGuestUser);
+      if (existingGuest.username === authForm.username) {
+        setAuthError('이미 사용 중인 아이디입니다. 로그인하기를 눌러주세요.');
+        return;
+      }
+    }
+
+    setAuthLoading(true);
+
+    // 게스트 모드로 시작 (로컬에만 저장)
+    const guestUser = {
+      name: authForm.username,
+      username: authForm.username,
+      email: `${authForm.username}@guest.local`,
+      isGuest: true,
+      isPremium: false
+    };
+    
+    setUser(guestUser);
+    setIsLoggedIn(true);
+    setIsPremiumUser(false); // 게스트는 무료 사용자
+    setCurrentPage('home');
+    
+    // 현재 게스트 정보와 비밀번호 저장
+    localStorage.setItem('guestUser', JSON.stringify(guestUser));
+    localStorage.setItem('guestPassword', authForm.password);
+    setAuthLoading(false);
   };
 
   // 비밀번호 찾기
   const handleForgotPassword = () => {
     alert('비밀번호 찾기 기능은 추후 제공될 예정입니다');
+  };
+
+  // 인증 코드 확인
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/verify-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: pendingEmail,
+          code: verificationCode
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setAuthToken(data.token);
+        localStorage.setItem('authToken', data.token);
+        
+        // 전체 프로필 정보 가져오기
+        await fetchUserProfile(data.token);
+        
+        setShowVerificationCode(false);
+        setVerificationCode('');
+        setCurrentPage('home');
+      } else {
+        setAuthError(data.error || '인증에 실패했습니다');
+      }
+    } catch (error) {
+      setAuthError('서버 연결에 실패했습니다');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // 인증 코드 재발송
+  const handleResendCode = async () => {
+    setAuthError('');
+    setAuthLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/resend-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: pendingEmail
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('인증 코드가 재발송되었습니다');
+      } else {
+        setAuthError(data.error || '재발송에 실패했습니다');
+      }
+    } catch (error) {
+      setAuthError('서버 연결에 실패했습니다');
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
   // 샘플 레시피 데이터
@@ -156,11 +362,6 @@ export default function AdCookingClass() {
       carbs: 35,
       fat: 18,
       image: '🍲',
-      purchaseLinks: {
-        '김치': 'https://example.com/kimchi',
-        '돼지고기': 'https://example.com/pork',
-        '두부': 'https://example.com/tofu'
-      },
       steps: [
         '김치를 송송 썰어 준비합니다',
         '돼지고기를 한입 크기로 잘라주세요',
@@ -180,11 +381,6 @@ export default function AdCookingClass() {
       carbs: 15,
       fat: 12,
       image: '🥗',
-      purchaseLinks: {
-        '양상추': 'https://example.com/lettuce',
-        '닭가슴살': 'https://example.com/chicken',
-        '아보카도': 'https://example.com/avocado'
-      },
       steps: [
         '양상추를 깨끗이 씻어주세요',
         '닭가슴살을 삶아주세요',
@@ -204,11 +400,6 @@ export default function AdCookingClass() {
       carbs: 30,
       fat: 8,
       image: '🍜',
-      purchaseLinks: {
-        '된장': 'https://example.com/doenjang',
-        '두부': 'https://example.com/tofu',
-        '감자': 'https://example.com/potato'
-      },
       steps: [
         '감자와 양파를 큼직하게 썰어주세요',
         '냄비에 물을 붓고 된장을 풀어주세요',
@@ -228,10 +419,6 @@ export default function AdCookingClass() {
       carbs: 28,
       fat: 22,
       image: '🥩',
-      purchaseLinks: {
-        '소고기': 'https://example.com/beef',
-        '간장': 'https://example.com/soy-sauce'
-      },
       steps: [
         '소고기를 얇게 썰어주세요',
         '양념장을 만들어주세요 (간장, 설탕, 마늘)',
@@ -251,9 +438,6 @@ export default function AdCookingClass() {
       carbs: 3,
       fat: 14,
       image: '🍳',
-      purchaseLinks: {
-        '계란': 'https://example.com/egg'
-      },
       steps: [
         '계란을 풀어주세요',
         '파를 잘게 썰어 계란에 넣어주세요',
@@ -391,8 +575,7 @@ export default function AdCookingClass() {
           missingIngredients: recipeIngredients
             .filter(ing => !ing.isAvailable)
             .map(ing => ing.name),
-          canMakeWithOwned: recipeIngredients.length > 0 && recipeIngredients.every(ing => ing.isAvailable),
-          purchaseLinks: {} // 실제로는 쇼핑몰 API 연동
+          canMakeWithOwned: recipeIngredients.length > 0 && recipeIngredients.every(ing => ing.isAvailable)
         };
       });
 
@@ -456,25 +639,194 @@ export default function AdCookingClass() {
     });
   };
 
-  const addMealToHistory = (recipe, rating) => {
+  const addMealToHistory = async (recipe, rating) => {
+    // 유료 사용자만 식사 기록 저장 가능
+    if (!isPremiumUser) {
+      alert('식사 기록 저장은 유료 기능입니다. 관리자 계정으로 로그인하거나 유료 플랜을 구매해주세요.');
+      return;
+    }
+
     const newMeal = {
-      id: Date.now(),
-      date: new Date().toISOString().split('T')[0],
-      meal: recipe.name,
-      rating: rating,
-      calories: recipe.calories
+      recipeName: recipe.name,
+      date: new Date(),
+      mealType: '저녁', // 기본값, 나중에 선택 가능하도록 수정 가능
+      rating: rating === 'like' ? 5 : rating === 'dislike' ? 1 : 3,
+      nutrition: {
+        calories: recipe.calories,
+        protein: recipe.protein,
+        carbs: recipe.carbs,
+        fat: recipe.fat
+      }
     };
-    setMealHistory([newMeal, ...mealHistory]);
+
+    // 로그인한 사용자는 서버에 저장
+    if (authToken) {
+      // 낙관적 업데이트: 먼저 UI에 추가
+      const optimisticMeal = {
+        id: 'temp-' + Date.now(),
+        date: new Date().toISOString().split('T')[0],
+        meal: recipe.name,
+        rating: rating,
+        calories: recipe.calories,
+        isOptimistic: true
+      };
+      setMealHistory([optimisticMeal, ...mealHistory]);
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/meals`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify(newMeal)
+        });
+
+        if (response.ok) {
+          // 서버에서 받은 실제 데이터로 교체
+          await fetchMealHistory();
+        } else {
+          // 실패 시 낙관적 업데이트 롤백
+          setMealHistory(mealHistory.filter(m => m.id !== optimisticMeal.id));
+          console.error('식사 기록 저장 실패');
+          alert('식사 기록 저장에 실패했습니다.');
+        }
+      } catch (error) {
+        // 에러 시 낙관적 업데이트 롤백
+        setMealHistory(mealHistory.filter(m => m.id !== optimisticMeal.id));
+        console.error('식사 기록 저장 오류:', error);
+        alert('서버 연결에 실패했습니다.');
+      }
+    } else {
+      // 게스트 사용자는 로컬에만 저장 (하지만 유료 기능이므로 여기 도달하지 않음)
+      const localMeal = {
+        id: Date.now(),
+        date: new Date().toISOString().split('T')[0],
+        meal: recipe.name,
+        rating: rating,
+        calories: recipe.calories
+      };
+      setMealHistory([localMeal, ...mealHistory]);
+      
+      // 게스트 사용자의 식사 기록도 localStorage에 저장
+      const guestMeals = JSON.parse(localStorage.getItem('guestMeals') || '[]');
+      localStorage.setItem('guestMeals', JSON.stringify([localMeal, ...guestMeals]));
+    }
   };
 
-  const updateMealRating = (mealId, newRating) => {
-    setMealHistory(mealHistory.map(meal => 
-      meal.id === mealId ? { ...meal, rating: newRating } : meal
-    ));
+  // 식사 기록 조회
+  const fetchMealHistory = async () => {
+    if (!authToken) {
+      // 게스트 사용자는 localStorage에서 불러오기
+      const guestMeals = JSON.parse(localStorage.getItem('guestMeals') || '[]');
+      setMealHistory(guestMeals);
+      return;
+    }
+
+    setIsFetchingMeals(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/meals`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // 서버 데이터를 로컬 형식으로 변환
+        const formattedMeals = data.meals.map(meal => ({
+          id: meal._id,
+          date: new Date(meal.date).toISOString().split('T')[0],
+          meal: meal.recipeName,
+          rating: meal.rating >= 4 ? 'like' : meal.rating <= 2 ? 'dislike' : 'neutral',
+          calories: meal.nutrition?.calories || 0
+        }));
+        setMealHistory(formattedMeals);
+      }
+    } catch (error) {
+      console.error('식사 기록 조회 오류:', error);
+    } finally {
+      setIsFetchingMeals(false);
+    }
   };
 
-  const deleteMeal = (mealId) => {
-    setMealHistory(mealHistory.filter(meal => meal.id !== mealId));
+  const updateMealRating = async (mealId, newRating) => {
+    if (authToken) {
+      // 낙관적 업데이트: 먼저 UI 업데이트
+      const previousMeals = [...mealHistory];
+      setMealHistory(mealHistory.map(meal => 
+        meal.id === mealId ? { ...meal, rating: newRating } : meal
+      ));
+      setMealActionLoading(mealId);
+
+      try {
+        const ratingValue = newRating === 'like' ? 5 : newRating === 'dislike' ? 1 : 3;
+        const response = await fetch(`${API_BASE_URL}/meals/${mealId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ rating: ratingValue })
+        });
+
+        if (!response.ok) {
+          // 실패 시 롤백
+          setMealHistory(previousMeals);
+          alert('평가 업데이트에 실패했습니다.');
+        }
+      } catch (error) {
+        // 에러 시 롤백
+        setMealHistory(previousMeals);
+        console.error('평가 업데이트 오류:', error);
+        alert('서버 연결에 실패했습니다.');
+      } finally {
+        setMealActionLoading(null);
+      }
+    } else {
+      // 게스트 사용자는 로컬만 업데이트
+      const updatedMeals = mealHistory.map(meal => 
+        meal.id === mealId ? { ...meal, rating: newRating } : meal
+      );
+      setMealHistory(updatedMeals);
+      localStorage.setItem('guestMeals', JSON.stringify(updatedMeals));
+    }
+  };
+
+  const deleteMeal = async (mealId) => {
+    if (authToken) {
+      // 낙관적 업데이트: 먼저 UI에서 제거
+      const previousMeals = [...mealHistory];
+      setMealHistory(mealHistory.filter(meal => meal.id !== mealId));
+      setMealActionLoading(mealId);
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/meals/${mealId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${authToken}`
+          }
+        });
+
+        if (!response.ok) {
+          // 실패 시 롤백
+          setMealHistory(previousMeals);
+          alert('식사 기록 삭제에 실패했습니다.');
+        }
+      } catch (error) {
+        // 에러 시 롤백
+        setMealHistory(previousMeals);
+        console.error('식사 기록 삭제 오류:', error);
+        alert('서버 연결에 실패했습니다.');
+      } finally {
+        setMealActionLoading(null);
+      }
+    } else {
+      // 게스트 사용자는 로컬만 삭제
+      const updatedMeals = mealHistory.filter(meal => meal.id !== mealId);
+      setMealHistory(updatedMeals);
+      localStorage.setItem('guestMeals', JSON.stringify(updatedMeals));
+    }
   };
 
   const getPersonalizedRecommendations = () => {
@@ -492,62 +844,453 @@ export default function AdCookingClass() {
 
   const finishCooking = (rating) => {
     if (selectedRecipe) {
-      addMealToHistory(selectedRecipe, rating);
-      alert(`요리 완성! ${rating === 'like' ? '맛있게 드세요 😊' : rating === 'dislike' ? '다음엔 더 좋은 레시피를 추천해드릴게요!' : '기록되었습니다!'}`);
+      if (isPremiumUser) {
+        addMealToHistory(selectedRecipe, rating);
+        alert(`요리 완성! ${rating === 'like' ? '맛있게 드세요 😊' : rating === 'dislike' ? '다음엔 더 좋은 레시피를 추천해드릴게요!' : '기록되었습니다!'}`);
+      } else {
+        alert(`요리 완성! ${rating === 'like' ? '맛있게 드세요 😊' : rating === 'dislike' ? '다음엔 더 좋은 레시피를 추천해드릴게요!' : ''}\n\n※ 식사 기록 저장은 유료 기능입니다.`);
+      }
       setCurrentPage('home');
     }
   };
 
-  // 홈 페이지
-  const HomePage = () => (
-    <div className="home-page">
-      <div className="hero-section">
-        <div className="hero-text">
-          <h1 className="hero-title">
+  // 메인 페이지 (비로그인 사용자용)
+  const MainPage = () => (
+    <div className="main-landing-page">
+      <div className="landing-hero">
+        <div className="landing-content">
+          <h1 className="landing-title">
             냉장고 재료로<br />
             <span className="gradient-text">맛있는 요리</span>를<br />
             만들어보세요
           </h1>
-          <p className="hero-subtitle">AI가 당신의 재료를 분석하고 최적의 레시피를 추천합니다</p>
+          <p className="landing-subtitle">
+            AI가 당신의 재료를 분석하고 최적의 레시피를 추천합니다
+          </p>
+          
+          <div className="landing-buttons">
+            <button 
+              className="btn-primary btn-large"
+              onClick={() => setCurrentPage('health')}
+            >
+              건강식단 입력하기
+            </button>
+            
+            <button 
+              className="btn-pro-subscribe"
+              onClick={() => {
+                // TODO: Polar Product ID를 여기에 입력하세요
+                // 예: const productId = 'prod_abc123xyz';
+                const productId = 'YOUR_PRODUCT_ID_HERE';
+                window.open(`https://polar.sh/adcookingclass/checkout/${productId}`, '_blank');
+              }}
+            >
+              <span className="pro-badge-icon">⭐</span>
+              Pro 구독하기 - $3/월
+            </button>
+          </div>
+
+          <div className="landing-features-preview">
+            <div className="feature-preview-item">
+              <span>AI 레시피 추천</span>
+            </div>
+            <div className="feature-preview-item">
+              <span>재료 자동 인식</span>
+            </div>
+            <div className="feature-preview-item">
+              <span>맞춤 건강 식단</span>
+            </div>
+          </div>
         </div>
-        <div className="hero-emoji">🍳</div>
+        
+        <div className="landing-image">
+          <div className="hero-emoji-large">🍳</div>
+        </div>
       </div>
 
-      <div className="feature-grid">
-        <div className="feature-card" onClick={() => setCurrentPage('recommend')}>
-          <div className="feature-icon">
-            <Refrigerator size={32} />
+      <div className="landing-pro-features">
+        <h2>Pro 구독 혜택</h2>
+        <div className="pro-features-grid">
+          <div className="pro-feature-card">
+            <h3>식사 기록 저장</h3>
+            <p>모든 식사 기록을 안전하게 저장하고 분석하세요</p>
           </div>
-          <h3>재료 기반 추천</h3>
-          <p>냉장고 속 재료로 만들 수 있는 요리를 찾아드려요</p>
-        </div>
-
-        <div className="feature-card" onClick={() => setCurrentPage('health')}>
-          <div className="feature-icon">
-            <Heart size={32} />
+          <div className="pro-feature-card">
+            <h3>AI 맞춤 레시피</h3>
+            <p>건강 프로필 기반 개인화된 레시피 추천</p>
           </div>
-          <h3>건강 식단</h3>
-          <p>목표에 맞는 맞춤형 식단을 설계해드려요</p>
-        </div>
-
-        <div className="feature-card">
-          <div className="feature-icon">
-            <ShoppingCart size={32} />
+          <div className="pro-feature-card">
+            <h3>영양 분석</h3>
+            <p>상세한 영양소 분석과 목표 달성 추적</p>
           </div>
-          <h3>재료 구매</h3>
-          <p>필요한 재료를 바로 장바구니에 담아보세요</p>
-        </div>
-
-        <div className="feature-card">
-          <div className="feature-icon">
-            <Clock size={32} />
+          <div className="pro-feature-card">
+            <h3>클라우드 동기화</h3>
+            <p>모든 기기에서 데이터 동기화</p>
           </div>
-          <h3>식사 기록</h3>
-          <p>내 식사 히스토리를 저장하고 분석해요</p>
         </div>
       </div>
     </div>
   );
+
+  // 로그인/회원가입 페이지
+  const LoginPage = () => {
+    return (
+      <div className="login-container">
+        <button 
+          type="button"
+          className="btn-back-to-main"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('메인으로 버튼 클릭됨 - currentPage를 main으로 변경');
+            setCurrentPage('main');
+            console.log('setCurrentPage 실행 완료');
+          }}
+          style={{
+            position: 'fixed',
+            top: '40px',
+            left: '40px',
+            zIndex: 10000,
+            cursor: 'pointer'
+          }}
+          onMouseEnter={() => console.log('버튼에 마우스 올림')}
+          onMouseDown={() => console.log('버튼 마우스 다운')}
+        >
+          ← 메인으로
+        </button>
+        
+        <div className="login-card">
+          <div className="login-header">
+            <ChefHat size={48} />
+            <h1>애드쿠킹클래스</h1>
+            <p>AI가 당신의 요리를 돕습니다</p>
+          </div>
+
+          {authError && (
+            <div className="auth-error">
+              <AlertCircle size={16} />
+              {authError}
+            </div>
+          )}
+          
+          <form className="login-form" onSubmit={(e) => e.preventDefault()}>
+            <input 
+              type="text"
+              placeholder="아이디"
+              className="input-field"
+              value={authForm.username}
+              onChange={(e) => setAuthForm({...authForm, username: e.target.value})}
+              required
+            />
+            
+            <input 
+              type="password" 
+              placeholder="비밀번호" 
+              className="input-field"
+              value={authForm.password}
+              onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
+              required
+            />
+
+            <button 
+              type="button"
+              className="btn-primary"
+              disabled={authLoading}
+              onClick={handleLogin}
+            >
+              {authLoading && authMode === 'login' ? '처리 중...' : '로그인하기'}
+            </button>
+          </form>
+        </div>
+
+        {/* 이메일 인증 모달 */}
+        {showVerificationCode && (
+          <div className="modal-overlay" onClick={() => setShowVerificationCode(false)}>
+            <div className="modal-content verification-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>이메일 인증</h3>
+                <button onClick={() => setShowVerificationCode(false)} className="modal-close">
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <p className="verification-description">
+                {pendingEmail}로 발송된 6자리 인증 코드를 입력해주세요.
+              </p>
+
+              {authError && (
+                <div className="auth-error">
+                  <AlertCircle size={16} />
+                  {authError}
+                </div>
+              )}
+
+              <form onSubmit={handleVerifyCode} className="verification-form">
+                <input
+                  type="text"
+                  placeholder="인증 코드 (6자리)"
+                  className="input-field verification-input"
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  maxLength={6}
+                  required
+                  autoFocus
+                />
+
+                <button 
+                  type="submit"
+                  className="btn-primary"
+                  disabled={authLoading || verificationCode.length !== 6}
+                >
+                  {authLoading ? '확인 중...' : '인증하기'}
+                </button>
+
+                <button 
+                  type="button"
+                  className="btn-text"
+                  onClick={handleResendCode}
+                  disabled={authLoading}
+                >
+                  인증 코드 재전송
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // 홈 페이지 (식단관리)
+  const HomePage = () => {
+    const recommendedRecipes = getRecommendedRecipes();
+    const targetCalories = calculateTargetCalories();
+    const hasHealthProfile = healthProfile.age && healthProfile.gender && healthProfile.height && healthProfile.weight;
+    
+    return (
+      <div className="home-page">
+        <div className="hero-section">
+          <div className="hero-text">
+            <h1 className="hero-title">
+              냉장고 재료로<br />
+              <span className="gradient-text">맛있는 요리</span>를<br />
+              만들어보세요
+            </h1>
+            <p className="hero-subtitle">
+              {hasHealthProfile 
+                ? `목표 칼로리: ${targetCalories}kcal | ${healthProfile.allergies.length > 0 ? `알레르기: ${healthProfile.allergies.join(', ')}` : '알레르기 없음'}`
+                : 'AI가 당신의 재료를 분석하고 최적의 레시피를 추천합니다'
+              }
+            </p>
+            {!hasHealthProfile && (
+              <button 
+                className="btn-secondary"
+                onClick={() => setCurrentPage('health')}
+                style={{marginTop: '16px'}}
+              >
+                건강 프로필 입력하기
+              </button>
+            )}
+          </div>
+          <div className="hero-emoji">🍳</div>
+        </div>
+
+        {/* 재료 입력 섹션 */}
+        <div className="ingredient-input-section">
+          <h2 className="section-title">냉장고 재료 입력</h2>
+          <div className="input-group">
+            <input
+              type="text"
+              value={inputIngredient}
+              onChange={(e) => setInputIngredient(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  addIngredient();
+                }
+              }}
+              placeholder="재료를 입력하세요 (예: 김치, 돼지고기)"
+              className="input-field"
+            />
+            <button onClick={addIngredient} className="btn-add">추가</button>
+            <button onClick={() => setShowImageUpload(true)} className="btn-camera">
+              <Camera size={20} />
+              촬영
+            </button>
+          </div>
+
+          {/* 이미지 업로드 모달 */}
+          {showImageUpload && (
+            <div className="modal-overlay" onClick={() => !isRecognizingImage && setShowImageUpload(false)}>
+              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                  <h3>냉장고 촬영하기</h3>
+                  {!isRecognizingImage && (
+                    <button onClick={() => setShowImageUpload(false)} className="modal-close">
+                      <X size={24} />
+                    </button>
+                  )}
+                </div>
+                <div className="upload-area">
+                  {isRecognizingImage ? (
+                    <>
+                      <Loader2 size={64} className="spinning" style={{ color: '#6c5ce7' }} />
+                      <p style={{ marginTop: '16px', fontWeight: '600' }}>AI가 재료를 인식하는 중...</p>
+                      <p style={{ fontSize: '14px', color: '#636e72' }}>잠시만 기다려주세요</p>
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={64} />
+                      <p>냉장고 사진을 업로드하세요</p>
+                      <label className="btn-primary" style={{marginTop: '16px', cursor: 'pointer'}}>
+                        사진 선택
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={handleImageUpload}
+                          style={{display: 'none'}}
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 인식된 재료 확인 */}
+          {recognizedIngredients.length > 0 && (
+            <div className="recognized-section">
+              <h4>인식된 재료를 확인해주세요</h4>
+              <div className="recognized-tags">
+                {recognizedIngredients.map((ing, idx) => (
+                  <div key={idx} className="recognized-tag">
+                    <span>{ing}</span>
+                    <div className="tag-actions">
+                      <button onClick={() => confirmRecognizedIngredient(ing)} className="tag-confirm">
+                        ✓
+                      </button>
+                      <button onClick={() => rejectRecognizedIngredient(ing)} className="tag-reject">
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {ingredients.length > 0 && (
+            <div className="ingredient-tags">
+              {ingredients.map((ing, idx) => (
+                <div key={idx} className="ingredient-tag">
+                  {ing}
+                  <button onClick={() => removeIngredient(ing)} className="tag-remove">×</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 필터 옵션 및 AI 레시피 생성 버튼 */}
+          {ingredients.length > 0 && (
+            <>
+              <div className="filter-section">
+                <button 
+                  className={`filter-btn ${filterMode === 'exact' ? 'active' : ''}`}
+                  onClick={() => setFilterMode('exact')}
+                >
+                  보유 재료만
+                </button>
+                <button 
+                  className={`filter-btn ${filterMode === 'partial' ? 'active' : ''}`}
+                  onClick={() => setFilterMode('partial')}
+                >
+                  일부 재료 추가 허용
+                </button>
+              </div>
+
+              <button 
+                className="btn-generate-ai"
+                onClick={generateAIRecipes}
+                disabled={isLoadingRecipes}
+              >
+                {isLoadingRecipes ? (
+                  <>
+                    <Loader2 size={20} className="spinning" />
+                    AI 레시피 생성 중...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={20} />
+                    AI 레시피 생성
+                  </>
+                )}
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* AI 생성 레시피 */}
+        {aiRecipes.length > 0 && (
+          <div className="recipes-section">
+            <h2 className="section-title">AI 추천 레시피</h2>
+            <div className="recipe-grid">
+              {aiRecipes.map((recipe, idx) => (
+                <div key={idx} className="recipe-card" onClick={() => startCooking(recipe)}>
+                  <div className="recipe-header">
+                    <h3>{recipe.name}</h3>
+                    <div className="recipe-badges">
+                      <span className="badge badge-time">
+                        <Clock size={14} />
+                        {recipe.time}
+                      </span>
+                      <span className="badge badge-difficulty">{recipe.difficulty}</span>
+                    </div>
+                  </div>
+                  <p className="recipe-description">{recipe.description}</p>
+                  <div className="recipe-footer">
+                    <span className="recipe-calories">
+                      <Flame size={16} />
+                      {recipe.calories}kcal
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 기존 추천 레시피 */}
+        {aiRecipes.length === 0 && recommendedRecipes.length > 0 && (
+          <div className="recipes-section">
+            <h2 className="section-title">추천 레시피</h2>
+            <div className="recipe-grid">
+              {recommendedRecipes.map((recipe, idx) => (
+                <div key={idx} className="recipe-card" onClick={() => startCooking(recipe)}>
+                  <div className="recipe-header">
+                    <h3>{recipe.name}</h3>
+                    <div className="recipe-badges">
+                      <span className="badge badge-time">
+                        <Clock size={14} />
+                        {recipe.time}
+                      </span>
+                      <span className="badge badge-difficulty">{recipe.difficulty}</span>
+                    </div>
+                  </div>
+                  <p className="recipe-description">{recipe.description}</p>
+                  <div className="recipe-footer">
+                    <span className="recipe-calories">
+                      <Flame size={16} />
+                      {recipe.calories}kcal
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // 재료 추천 페이지
   const RecommendPage = () => {
@@ -758,11 +1501,6 @@ export default function AdCookingClass() {
                         {recipe.missingIngredients.map((ing, idx) => (
                           <span key={idx} className="mini-tag missing-tag">
                             {ing}
-                            {recipe.purchaseLinks && recipe.purchaseLinks[ing] && (
-                              <a href={recipe.purchaseLinks[ing]} target="_blank" rel="noopener noreferrer" className="purchase-link">
-                                <ExternalLink size={12} />
-                              </a>
-                            )}
                           </span>
                         ))}
                       </div>
@@ -865,6 +1603,42 @@ export default function AdCookingClass() {
   const HealthPage = () => {
     const bmr = calculateBMR();
     const targetCalories = calculateTargetCalories();
+    const [newAllergy, setNewAllergy] = useState('');
+    const [newDisease, setNewDisease] = useState('');
+
+    const addAllergy = () => {
+      if (newAllergy.trim() && !healthProfile.allergies.includes(newAllergy.trim())) {
+        setHealthProfile({
+          ...healthProfile,
+          allergies: [...healthProfile.allergies, newAllergy.trim()]
+        });
+        setNewAllergy('');
+      }
+    };
+
+    const removeAllergy = (allergy) => {
+      setHealthProfile({
+        ...healthProfile,
+        allergies: healthProfile.allergies.filter(a => a !== allergy)
+      });
+    };
+
+    const addDisease = () => {
+      if (newDisease.trim() && !healthProfile.diseases.includes(newDisease.trim())) {
+        setHealthProfile({
+          ...healthProfile,
+          diseases: [...healthProfile.diseases, newDisease.trim()]
+        });
+        setNewDisease('');
+      }
+    };
+
+    const removeDisease = (disease) => {
+      setHealthProfile({
+        ...healthProfile,
+        diseases: healthProfile.diseases.filter(d => d !== disease)
+      });
+    };
 
     return (
       <div className="health-page">
@@ -938,45 +1712,70 @@ export default function AdCookingClass() {
 
           <div className="form-group">
             <label>질환 (선택사항)</label>
-            <select 
-              className="input-field"
-              value={healthProfile.disease}
-              onChange={(e) => setHealthProfile({...healthProfile, disease: e.target.value})}
-            >
-              <option value="">없음</option>
-              <option value="diabetes">당뇨</option>
-              <option value="hypertension">고혈압</option>
-              <option value="heart">심장질환</option>
-              <option value="kidney">신장질환</option>
-            </select>
+            <div className="tag-input-group">
+              <input
+                type="text"
+                value={newDisease}
+                onChange={(e) => setNewDisease(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    addDisease();
+                  }
+                }}
+                placeholder="질환 입력 (예: 당뇨, 고혈압)"
+                className="input-field"
+              />
+              <button onClick={addDisease} className="btn-add" type="button">
+                <Plus size={18} />
+              </button>
+            </div>
+            {healthProfile.diseases.length > 0 && (
+              <div className="tag-list">
+                {healthProfile.diseases.map((disease, index) => (
+                  <div key={index} className="tag">
+                    {disease}
+                    <button onClick={() => removeDisease(disease)} type="button">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="form-group">
             <label>알레르기</label>
-            <div className="allergy-options">
-              {['우유', '계란', '땅콩', '갑각류', '밀', '대두'].map(item => (
-                <label key={item} className="checkbox-label">
-                  <input 
-                    type="checkbox"
-                    checked={healthProfile.allergies.includes(item)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setHealthProfile({
-                          ...healthProfile,
-                          allergies: [...healthProfile.allergies, item]
-                        });
-                      } else {
-                        setHealthProfile({
-                          ...healthProfile,
-                          allergies: healthProfile.allergies.filter(a => a !== item)
-                        });
-                      }
-                    }}
-                  />
-                  <span>{item}</span>
-                </label>
-              ))}
+            <div className="tag-input-group">
+              <input
+                type="text"
+                value={newAllergy}
+                onChange={(e) => setNewAllergy(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    addAllergy();
+                  }
+                }}
+                placeholder="알레르기 항목 입력 (예: 땅콩, 우유)"
+                className="input-field"
+              />
+              <button onClick={addAllergy} className="btn-add" type="button">
+                <Plus size={18} />
+              </button>
             </div>
+            {healthProfile.allergies.length > 0 && (
+              <div className="tag-list">
+                {healthProfile.allergies.map((allergy, index) => (
+                  <div key={index} className="tag">
+                    {allergy}
+                    <button onClick={() => removeAllergy(allergy)} type="button">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {bmr && targetCalories && (
@@ -992,7 +1791,19 @@ export default function AdCookingClass() {
             </div>
           )}
 
-          <button className="btn-primary">맞춤 식단 받기</button>
+          <button 
+            className="btn-primary"
+            onClick={() => {
+              // 건강 프로필 저장 (localStorage 또는 서버)
+              if (user) {
+                localStorage.setItem('healthProfile', JSON.stringify(healthProfile));
+              }
+              // 식단관리 페이지로 이동
+              setCurrentPage('home');
+            }}
+          >
+            맞춤 식단 받기
+          </button>
         </div>
 
         <div className="health-tips">
@@ -1013,9 +1824,68 @@ export default function AdCookingClass() {
 
   // 식사 기록 페이지
   const HistoryPage = () => {
+    // 유료 사용자만 접근 가능
+    if (!isPremiumUser) {
+      return (
+        <div className="history-page">
+          <h2 className="page-title">식사 기록</h2>
+          <div className="premium-required">
+            <div className="premium-icon">🔒</div>
+            <h3>유료 기능입니다</h3>
+            <p>식사 기록 저장 및 조회는 유료 기능입니다.</p>
+            <p>관리자 계정(admin/admin1234)으로 로그인하거나</p>
+            <p>유료 플랜을 구매해주세요.</p>
+          </div>
+        </div>
+      );
+    }
+
     const totalCalories = mealHistory.reduce((sum, meal) => sum + meal.calories, 0);
     const likedMeals = mealHistory.filter(m => m.rating === 'like').length;
     const personalizedRecipes = getPersonalizedRecommendations();
+
+    // 스켈레톤 UI
+    if (isFetchingMeals) {
+      return (
+        <div className="history-page">
+          <h2 className="page-title">식사 기록</h2>
+          
+          {/* 통계 카드 스켈레톤 */}
+          <div className="stats-grid">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="stat-card skeleton">
+                <div className="skeleton-icon"></div>
+                <div style={{flex: 1}}>
+                  <div className="skeleton-text" style={{width: '60%', height: '14px', marginBottom: '8px'}}></div>
+                  <div className="skeleton-text" style={{width: '80%', height: '24px'}}></div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 식사 기록 목록 스켈레톤 */}
+          <div className="meal-list">
+            <h3 className="section-title">기록 내역</h3>
+            <div className="meal-items">
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="meal-item skeleton">
+                  <div className="meal-info" style={{flex: 1}}>
+                    <div className="skeleton-text" style={{width: '100px', height: '14px', marginBottom: '8px'}}></div>
+                    <div className="skeleton-text" style={{width: '150px', height: '18px', marginBottom: '4px'}}></div>
+                    <div className="skeleton-text" style={{width: '80px', height: '14px'}}></div>
+                  </div>
+                  <div className="meal-actions">
+                    <div className="skeleton-icon"></div>
+                    <div className="skeleton-icon"></div>
+                    <div className="skeleton-icon"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="history-page">
@@ -1090,7 +1960,10 @@ export default function AdCookingClass() {
           ) : (
             <div className="meal-items">
               {mealHistory.map(meal => (
-                <div key={meal.id} className="meal-item">
+                <div 
+                  key={meal.id} 
+                  className={`meal-item ${meal.isOptimistic ? 'optimistic' : ''} ${mealActionLoading === meal.id ? 'loading' : ''}`}
+                >
                   <div className="meal-info">
                     <div className="meal-date">{meal.date}</div>
                     <div className="meal-name">{meal.meal}</div>
@@ -1098,16 +1971,26 @@ export default function AdCookingClass() {
                   </div>
                   <div className="meal-actions">
                     <button 
-                      className={`rating-icon ${meal.rating === 'like' ? 'active' : ''}`}
+                      className={`rating-icon rating-like ${meal.rating === 'like' ? 'active' : ''}`}
                       onClick={() => updateMealRating(meal.id, meal.rating === 'like' ? 'neutral' : 'like')}
+                      disabled={mealActionLoading === meal.id}
                     >
-                      <ThumbsUp size={18} />
+                      {mealActionLoading === meal.id ? (
+                        <Loader2 size={18} className="spinning" />
+                      ) : (
+                        <ThumbsUp size={18} />
+                      )}
                     </button>
                     <button 
-                      className={`rating-icon ${meal.rating === 'dislike' ? 'active' : ''}`}
+                      className={`rating-icon rating-dislike ${meal.rating === 'dislike' ? 'active' : ''}`}
                       onClick={() => updateMealRating(meal.id, meal.rating === 'dislike' ? 'neutral' : 'dislike')}
+                      disabled={mealActionLoading === meal.id}
                     >
-                      <ThumbsDown size={18} />
+                      {mealActionLoading === meal.id ? (
+                        <Loader2 size={18} className="spinning" />
+                      ) : (
+                        <ThumbsDown size={18} />
+                      )}
                     </button>
                     <button 
                       className="delete-icon"
@@ -1116,8 +1999,13 @@ export default function AdCookingClass() {
                           deleteMeal(meal.id);
                         }
                       }}
+                      disabled={mealActionLoading === meal.id}
                     >
-                      <X size={18} />
+                      {mealActionLoading === meal.id ? (
+                        <Loader2 size={18} className="spinning" />
+                      ) : (
+                        <X size={18} />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -1129,30 +2017,340 @@ export default function AdCookingClass() {
     );
   };
 
+  // 프로필 페이지
+  const ProfilePage = () => {
+    const [profileForm, setProfileForm] = useState({
+      name: user?.name || '',
+      age: user?.healthProfile?.age || '',
+      gender: user?.healthProfile?.gender || '',
+      height: user?.healthProfile?.height || '',
+      weight: user?.healthProfile?.weight || '',
+      allergies: user?.healthProfile?.allergies || [],
+      diseases: user?.healthProfile?.diseases || [],
+      goal: user?.healthProfile?.goal || ''
+    });
+    const [newAllergy, setNewAllergy] = useState('');
+    const [newDisease, setNewDisease] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveMessage, setSaveMessage] = useState('');
+
+    const handleSaveProfile = async () => {
+      setIsSaving(true);
+      setSaveMessage('');
+
+      try {
+        // 게스트 사용자는 로컬에만 저장
+        if (user?.isGuest || !authToken) {
+          const updatedUser = {
+            ...user,
+            name: profileForm.name,
+            healthProfile: {
+              age: profileForm.age ? parseInt(profileForm.age) : undefined,
+              gender: profileForm.gender || undefined,
+              height: profileForm.height ? parseFloat(profileForm.height) : undefined,
+              weight: profileForm.weight ? parseFloat(profileForm.weight) : undefined,
+              allergies: profileForm.allergies,
+              diseases: profileForm.diseases,
+              goal: profileForm.goal || undefined
+            }
+          };
+          
+          setUser(updatedUser);
+          localStorage.setItem('guestUser', JSON.stringify(updatedUser));
+          setSaveMessage('프로필이 저장되었습니다!');
+          setTimeout(() => setSaveMessage(''), 3000);
+          setIsSaving(false);
+          return;
+        }
+
+        // 로그인 사용자는 서버에 저장
+        const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            name: profileForm.name,
+            healthProfile: {
+              age: profileForm.age ? parseInt(profileForm.age) : undefined,
+              gender: profileForm.gender || undefined,
+              height: profileForm.height ? parseFloat(profileForm.height) : undefined,
+              weight: profileForm.weight ? parseFloat(profileForm.weight) : undefined,
+              allergies: profileForm.allergies,
+              diseases: profileForm.diseases,
+              goal: profileForm.goal || undefined
+            }
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setUser(data.user);
+          setSaveMessage('프로필이 저장되었습니다!');
+          setTimeout(() => setSaveMessage(''), 3000);
+        } else {
+          setSaveMessage(data.error || '저장에 실패했습니다');
+        }
+      } catch (error) {
+        setSaveMessage('서버 연결에 실패했습니다');
+      } finally {
+        setIsSaving(false);
+      }
+    };
+
+    const addAllergy = () => {
+      if (newAllergy.trim() && !profileForm.allergies.includes(newAllergy.trim())) {
+        setProfileForm({
+          ...profileForm,
+          allergies: [...profileForm.allergies, newAllergy.trim()]
+        });
+        setNewAllergy('');
+      }
+    };
+
+    const removeAllergy = (allergy) => {
+      setProfileForm({
+        ...profileForm,
+        allergies: profileForm.allergies.filter(a => a !== allergy)
+      });
+    };
+
+    const addDisease = () => {
+      if (newDisease.trim() && !profileForm.diseases.includes(newDisease.trim())) {
+        setProfileForm({
+          ...profileForm,
+          diseases: [...profileForm.diseases, newDisease.trim()]
+        });
+        setNewDisease('');
+      }
+    };
+
+    const removeDisease = (disease) => {
+      setProfileForm({
+        ...profileForm,
+        diseases: profileForm.diseases.filter(d => d !== disease)
+      });
+    };
+
+    return (
+      <div className="profile-page">
+        <h2 className="page-title">프로필 설정</h2>
+
+        <div className="profile-container">
+          {/* 기본 정보 */}
+          <div className="profile-section">
+            <h3 className="section-title">
+              <User size={20} />
+              기본 정보
+            </h3>
+            <div className="form-grid">
+              <div className="form-group">
+                <label>이름</label>
+                <input
+                  type="text"
+                  value={profileForm.name}
+                  onChange={(e) => setProfileForm({...profileForm, name: e.target.value})}
+                  placeholder="이름을 입력하세요"
+                />
+              </div>
+              <div className="form-group">
+                <label>이메일</label>
+                <input
+                  type="email"
+                  value={user?.email || ''}
+                  disabled
+                  style={{background: '#f0f0f0', cursor: 'not-allowed'}}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 건강 프로필 */}
+          <div className="profile-section">
+            <h3 className="section-title">
+              <Heart size={20} />
+              건강 프로필
+            </h3>
+            <div className="form-grid">
+              <div className="form-group">
+                <label>나이</label>
+                <input
+                  type="number"
+                  value={profileForm.age}
+                  onChange={(e) => setProfileForm({...profileForm, age: e.target.value})}
+                  placeholder="나이"
+                />
+              </div>
+              <div className="form-group">
+                <label>성별</label>
+                <select
+                  value={profileForm.gender}
+                  onChange={(e) => setProfileForm({...profileForm, gender: e.target.value})}
+                >
+                  <option value="">선택하세요</option>
+                  <option value="male">남성</option>
+                  <option value="female">여성</option>
+                  <option value="other">기타</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>키 (cm)</label>
+                <input
+                  type="number"
+                  value={profileForm.height}
+                  onChange={(e) => setProfileForm({...profileForm, height: e.target.value})}
+                  placeholder="키"
+                />
+              </div>
+              <div className="form-group">
+                <label>몸무게 (kg)</label>
+                <input
+                  type="number"
+                  value={profileForm.weight}
+                  onChange={(e) => setProfileForm({...profileForm, weight: e.target.value})}
+                  placeholder="몸무게"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 목표 */}
+          <div className="profile-section">
+            <h3 className="section-title">
+              <TrendingUp size={20} />
+              건강 목표
+            </h3>
+            <div className="form-group">
+              <label>목표</label>
+              <select
+                value={profileForm.goal}
+                onChange={(e) => setProfileForm({...profileForm, goal: e.target.value})}
+              >
+                <option value="">선택하세요</option>
+                <option value="다이어트">다이어트</option>
+                <option value="건강유지">건강유지</option>
+                <option value="체중증가">체중증가</option>
+                <option value="근육증가">근육증가</option>
+              </select>
+            </div>
+          </div>
+
+          {/* 알레르기 */}
+          <div className="profile-section">
+            <h3 className="section-title">
+              <AlertCircle size={20} />
+              알레르기 정보
+            </h3>
+            <div className="tag-input-group">
+              <input
+                type="text"
+                value={newAllergy}
+                onChange={(e) => setNewAllergy(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addAllergy()}
+                placeholder="알레르기 항목 입력 (예: 땅콩, 우유)"
+              />
+              <button onClick={addAllergy} className="btn-add">
+                <Plus size={18} />
+              </button>
+            </div>
+            <div className="tag-list">
+              {profileForm.allergies.map((allergy, index) => (
+                <div key={index} className="tag">
+                  {allergy}
+                  <button onClick={() => removeAllergy(allergy)}>
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 질병 정보 */}
+          <div className="profile-section">
+            <h3 className="section-title">
+              <AlertCircle size={20} />
+              질병 정보
+            </h3>
+            <div className="tag-input-group">
+              <input
+                type="text"
+                value={newDisease}
+                onChange={(e) => setNewDisease(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addDisease()}
+                placeholder="질병 정보 입력 (예: 당뇨, 고혈압)"
+              />
+              <button onClick={addDisease} className="btn-add">
+                <Plus size={18} />
+              </button>
+            </div>
+            <div className="tag-list">
+              {profileForm.diseases.map((disease, index) => (
+                <div key={index} className="tag">
+                  {disease}
+                  <button onClick={() => removeDisease(disease)}>
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 저장 버튼 */}
+          <div className="profile-actions">
+            <button 
+              onClick={handleSaveProfile} 
+              className="btn-save"
+              disabled={isSaving}
+            >
+              {isSaving ? '저장 중...' : '프로필 저장'}
+            </button>
+            {saveMessage && (
+              <div className={`save-message ${saveMessage.includes('성공') || saveMessage.includes('저장') ? 'success' : 'error'}`}>
+                {saveMessage}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // 네비게이션 바
   const Navigation = () => (
     <nav className="navbar">
-      <div className="nav-brand" onClick={() => setCurrentPage('home')}>
+      <div className="nav-brand" onClick={() => setCurrentPage('main')}>
         <ChefHat size={28} />
         <span>애드쿠킹클래스</span>
+        {isPremiumUser && <span className="premium-badge">PRO</span>}
       </div>
       
       <div className="nav-menu">
         <button onClick={() => setCurrentPage('home')} className={currentPage === 'home' ? 'active' : ''}>
-          홈
+          식단관리
         </button>
-        <button onClick={() => setCurrentPage('recommend')} className={currentPage === 'recommend' ? 'active' : ''}>
-          레시피 추천
+        <button 
+          onClick={() => setCurrentPage('history')} 
+          className={currentPage === 'history' ? 'active' : ''}
+        >
+          식사기록 {!isPremiumUser && <span className="premium-icon">🔒</span>}
         </button>
-        <button onClick={() => setCurrentPage('health')} className={currentPage === 'health' ? 'active' : ''}>
-          건강 식단
+        <button onClick={() => setCurrentPage('profile')} className={currentPage === 'profile' ? 'active' : ''}>
+          프로필
         </button>
-        <button onClick={() => setCurrentPage('history')} className={currentPage === 'history' ? 'active' : ''}>
-          식사 기록
-        </button>
-        <button className="nav-user" onClick={handleLogout} title="로그아웃">
-          <User size={20} />
-          {user && <span style={{marginLeft: '8px', fontSize: '14px'}}>{user.name}</span>}
+        <button 
+          onClick={() => {
+            setIsLoggedIn(false);
+            setUser(null);
+            setAuthToken(null);
+            setIsPremiumUser(false);
+            localStorage.removeItem('authToken');
+            setCurrentPage('main');
+          }}
+          className="btn-logout"
+        >
+          Pro계정으로 로그인
         </button>
       </div>
     </nav>
@@ -1190,6 +2388,38 @@ export default function AdCookingClass() {
             max-width: 420px;
             width: 100%;
             animation: slideUp 0.6s ease-out;
+            position: relative;
+          }
+
+          .btn-back-to-main {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: #f8f9fa;
+            border: 1px solid #e1e8ed;
+            color: #636e72;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 10px 16px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            pointer-events: auto;
+          }
+
+          .btn-back-to-main:hover {
+            background: #e9ecef;
+            color: #2d3436;
+            border-color: #ced4da;
+          }
+
+          .btn-back-to-main:active {
+            transform: scale(0.95);
+            background: #dee2e6;
           }
 
           @keyframes slideUp {
@@ -1247,9 +2477,9 @@ export default function AdCookingClass() {
           }
 
           .btn-primary {
-            background: linear-gradient(135deg, #ff6b6b 0%, #ff8787 100%);
-            color: white;
-            border: none;
+            background: #FFE5E5;
+            color: #2d3436;
+            border: 2px solid #FFB8B8;
             padding: 16px;
             border-radius: 12px;
             font-size: 16px;
@@ -1260,14 +2490,16 @@ export default function AdCookingClass() {
           }
 
           .btn-primary:hover {
+            background: #FFD0D0;
+            border-color: #FFA0A0;
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(255, 107, 107, 0.3);
+            box-shadow: 0 10px 25px rgba(255, 184, 184, 0.3);
           }
 
           .btn-secondary {
             background: white;
-            color: #ff6b6b;
-            border: 2px solid #ff6b6b;
+            color: #2d3436;
+            border: 2px solid #FFB8B8;
             padding: 14px;
             border-radius: 12px;
             font-size: 16px;
@@ -1278,7 +2510,8 @@ export default function AdCookingClass() {
           }
 
           .btn-secondary:hover {
-            background: #fff5f5;
+            background: #FFE5E5;
+            border-color: #FFA0A0;
           }
 
           .auth-tabs {
@@ -1340,34 +2573,102 @@ export default function AdCookingClass() {
             opacity: 0.6;
             cursor: not-allowed;
           }
+
+          /* 모달 스타일 */
+          .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn 0.2s;
+          }
+
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+
+          .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 32px;
+            max-width: 450px;
+            width: 90%;
+            animation: slideUp 0.3s ease-out;
+          }
+
+          .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+          }
+
+          .modal-header h3 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #2d3436;
+          }
+
+          .modal-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #636e72;
+            padding: 4px;
+            border-radius: 8px;
+            transition: all 0.2s;
+          }
+
+          .modal-close:hover {
+            background: #f1f3f4;
+            color: #2d3436;
+          }
+
+          .verification-modal {
+            max-width: 450px;
+          }
+
+          .verification-description {
+            color: #636e72;
+            font-size: 14px;
+            margin-bottom: 24px;
+            text-align: center;
+            line-height: 1.6;
+          }
+
+          .verification-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+          }
+
+          .verification-input {
+            text-align: center;
+            font-size: 24px;
+            letter-spacing: 8px;
+            font-weight: 600;
+          }
         `}</style>
         <div className="login-container">
           <div className="login-card">
+            <button 
+              className="btn-back-to-main"
+              onClick={() => setCurrentPage('main')}
+            >
+              ← 메인으로
+            </button>
+            
             <div className="login-header">
               <ChefHat size={48} />
               <h1>애드쿠킹클래스</h1>
               <p>AI가 당신의 요리를 돕습니다</p>
-            </div>
-            
-            <div className="auth-tabs">
-              <button 
-                className={`auth-tab ${authMode === 'login' ? 'active' : ''}`}
-                onClick={() => {
-                  setAuthMode('login');
-                  setAuthError('');
-                }}
-              >
-                로그인
-              </button>
-              <button 
-                className={`auth-tab ${authMode === 'register' ? 'active' : ''}`}
-                onClick={() => {
-                  setAuthMode('register');
-                  setAuthError('');
-                }}
-              >
-                회원가입
-              </button>
             </div>
 
             {authError && (
@@ -1377,24 +2678,13 @@ export default function AdCookingClass() {
               </div>
             )}
             
-            <form className="login-form" onSubmit={authMode === 'login' ? handleLogin : handleRegister}>
-              {authMode === 'register' && (
-                <input 
-                  type="text" 
-                  placeholder="이름" 
-                  className="input-field"
-                  value={authForm.name}
-                  onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
-                  required
-                />
-              )}
-              
+            <form className="login-form" onSubmit={(e) => e.preventDefault()}>
               <input 
-                type="email" 
-                placeholder="이메일" 
+                type="text"
+                placeholder="아이디"
                 className="input-field"
-                value={authForm.email}
-                onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
+                value={authForm.username}
+                onChange={(e) => setAuthForm({...authForm, username: e.target.value})}
                 required
               />
               
@@ -1406,37 +2696,73 @@ export default function AdCookingClass() {
                 onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
                 required
               />
-              
-              {authMode === 'register' && (
-                <input 
-                  type="password" 
-                  placeholder="비밀번호 확인" 
-                  className="input-field"
-                  value={authForm.confirmPassword}
-                  onChange={(e) => setAuthForm({...authForm, confirmPassword: e.target.value})}
-                  required
-                />
-              )}
-              
+
+
               <button 
-                type="submit"
-                className="btn-primary"
+                type="button"
+                className="btn-secondary"
                 disabled={authLoading}
+                onClick={handleLogin}
               >
-                {authLoading ? '처리 중...' : (authMode === 'login' ? '로그인' : '회원가입')}
+                {authLoading && authMode === 'login' ? '처리 중...' : '로그인하기'}
               </button>
-              
-              {authMode === 'login' && (
-                <button 
-                  type="button"
-                  className="btn-text"
-                  onClick={handleForgotPassword}
-                >
-                  비밀번호를 잊으셨나요?
-                </button>
-              )}
             </form>
           </div>
+
+          {/* 이메일 인증 모달 */}
+          {showVerificationCode && (
+            <div className="modal-overlay" onClick={() => setShowVerificationCode(false)}>
+              <div className="modal-content verification-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                  <h3>이메일 인증</h3>
+                  <button onClick={() => setShowVerificationCode(false)} className="modal-close">
+                    <X size={24} />
+                  </button>
+                </div>
+                
+                <p className="verification-description">
+                  {pendingEmail}로 발송된 6자리 인증 코드를 입력해주세요.
+                </p>
+
+                {authError && (
+                  <div className="auth-error">
+                    <AlertCircle size={16} />
+                    {authError}
+                  </div>
+                )}
+
+                <form onSubmit={handleVerifyCode} className="verification-form">
+                  <input
+                    type="text"
+                    placeholder="인증 코드 (6자리)"
+                    className="input-field verification-input"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    maxLength={6}
+                    required
+                    autoFocus
+                  />
+
+                  <button 
+                    type="submit"
+                    className="btn-primary"
+                    disabled={authLoading || verificationCode.length !== 6}
+                  >
+                    {authLoading ? '확인 중...' : '인증하기'}
+                  </button>
+
+                  <button 
+                    type="button"
+                    className="btn-text"
+                    onClick={handleResendCode}
+                    disabled={authLoading}
+                  >
+                    인증 코드 재발송
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       </>
     );
@@ -1483,6 +2809,50 @@ export default function AdCookingClass() {
           color: #ff6b6b;
         }
 
+        .premium-badge {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 4px 10px;
+          border-radius: 12px;
+          letter-spacing: 0.5px;
+        }
+
+        .premium-icon {
+          font-size: 14px;
+          margin-left: 4px;
+        }
+
+        .premium-required {
+          text-align: center;
+          padding: 80px 20px;
+          background: white;
+          border-radius: 20px;
+          margin: 40px auto;
+          max-width: 600px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .premium-required .premium-icon {
+          font-size: 64px;
+          margin-bottom: 24px;
+        }
+
+        .premium-required h3 {
+          font-size: 28px;
+          font-weight: 700;
+          color: #2d3436;
+          margin-bottom: 16px;
+        }
+
+        .premium-required p {
+          font-size: 16px;
+          color: #636e72;
+          margin: 8px 0;
+          line-height: 1.6;
+        }
+
         .nav-menu {
           display: flex;
           gap: 8px;
@@ -1508,8 +2878,8 @@ export default function AdCookingClass() {
         }
 
         .nav-menu button.active {
-          background: #fff5f5;
-          color: #ff6b6b;
+          background: #FFE5E5;
+          color: #2d3436;
         }
 
         .nav-user {
@@ -1519,9 +2889,194 @@ export default function AdCookingClass() {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #ff6b6b !important;
-          color: white !important;
+          background: #FFE5E5 !important;
+          color: #2d3436 !important;
+          border: 2px solid #FFB8B8 !important;
           margin-left: 8px;
+        }
+
+        /* Main Landing Page */
+        .main-landing-page {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        }
+
+        .landing-hero {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 100px 40px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 60px;
+          min-height: 90vh;
+        }
+
+        .landing-content {
+          flex: 1;
+          max-width: 600px;
+        }
+
+        .landing-title {
+          font-size: 64px;
+          font-weight: 800;
+          line-height: 1.2;
+          color: #2d3436;
+          margin-bottom: 24px;
+        }
+
+        .landing-subtitle {
+          font-size: 24px;
+          color: #636e72;
+          margin-bottom: 48px;
+          line-height: 1.6;
+        }
+
+        .landing-buttons {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          margin-bottom: 48px;
+        }
+
+        .btn-large {
+          padding: 20px 48px;
+          font-size: 20px;
+          font-weight: 700;
+        }
+
+        .btn-pro-login {
+          background: #FFB8B8;
+          color: white;
+          border: none;
+          padding: 20px 48px;
+          border-radius: 16px;
+          font-size: 20px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          box-shadow: 0 10px 30px rgba(255, 184, 184, 0.3);
+        }
+
+        .btn-pro-login:hover {
+          background: #FFA0A0;
+          transform: translateY(-4px);
+          box-shadow: 0 15px 40px rgba(255, 184, 184, 0.4);
+        }
+
+        .btn-pro-subscribe {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
+          padding: 20px 48px;
+          border-radius: 16px;
+          font-size: 20px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-pro-subscribe:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 15px 40px rgba(102, 126, 234, 0.4);
+        }
+
+        .pro-badge-icon {
+          font-size: 24px;
+        }
+
+        .landing-features-preview {
+          display: flex;
+          gap: 24px;
+          flex-wrap: wrap;
+        }
+
+        .feature-preview-item {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px 24px;
+          background: white;
+          border-radius: 16px;
+          font-weight: 600;
+          color: #2d3436;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .feature-icon {
+          font-size: 24px;
+        }
+
+        .landing-image {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .hero-emoji-large {
+          font-size: 300px;
+          animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-20px); }
+        }
+
+        .landing-pro-features {
+          background: white;
+          padding: 100px 40px;
+        }
+
+        .landing-pro-features h2 {
+          text-align: center;
+          font-size: 48px;
+          font-weight: 800;
+          color: #2d3436;
+          margin-bottom: 60px;
+        }
+
+        .pro-features-grid {
+          max-width: 1200px;
+          margin: 0 auto;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          gap: 32px;
+        }
+
+        .pro-feature-card {
+          background: white;
+          padding: 40px;
+          border-radius: 24px;
+          text-align: center;
+          transition: all 0.3s ease;
+          border: 2px solid #f1f3f4;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .pro-feature-card:hover {
+          transform: translateY(-8px);
+          border-color: #667eea;
+          box-shadow: 0 20px 40px rgba(102, 126, 234, 0.2);
+        }
+
+        .pro-feature-card h3 {
+          font-size: 24px;
+          font-weight: 700;
+          color: #2d3436;
+          margin-bottom: 12px;
+        }
+
+        .pro-feature-card p {
+          font-size: 16px;
+          color: #636e72;
+          line-height: 1.6;
         }
 
         /* Home Page */
@@ -1673,9 +3228,9 @@ export default function AdCookingClass() {
         }
 
         .btn-add {
-          background: #ff6b6b;
-          color: white;
-          border: none;
+          background: #FFE5E5;
+          color: #2d3436;
+          border: 2px solid #FFB8B8;
           padding: 16px 32px;
           border-radius: 12px;
           font-size: 15px;
@@ -1686,7 +3241,8 @@ export default function AdCookingClass() {
         }
 
         .btn-add:hover {
-          background: #ff5252;
+          background: #FFD0D0;
+          border-color: #FFA0A0;
         }
 
         .ingredient-tags {
@@ -1994,6 +3550,27 @@ export default function AdCookingClass() {
           box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         }
 
+        .health-form .btn-primary {
+          width: 100%;
+          margin-top: 24px;
+          background: #FFE5E5;
+          color: #2d3436;
+          border: 2px solid #FFB8B8;
+          padding: 18px;
+          border-radius: 12px;
+          font-size: 18px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .health-form .btn-primary:hover {
+          background: #FFD0D0;
+          border-color: #FFA0A0;
+          transform: translateY(-2px);
+          box-shadow: 0 10px 25px rgba(255, 184, 184, 0.3);
+        }
+
         .form-group {
           margin-bottom: 24px;
         }
@@ -2020,36 +3597,8 @@ export default function AdCookingClass() {
         .form-group .input-field:focus,
         .form-group select:focus {
           outline: none;
-          border-color: #ff6b6b;
-          box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.1);
-        }
-
-        .allergy-options {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 12px;
-        }
-
-        .checkbox-label {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          cursor: pointer;
-          padding: 12px;
-          border: 2px solid #f1f3f4;
-          border-radius: 10px;
-          transition: all 0.2s;
-        }
-
-        .checkbox-label:hover {
-          border-color: #ff6b6b;
-          background: #fff5f5;
-        }
-
-        .checkbox-label input[type="checkbox"] {
-          width: 18px;
-          height: 18px;
-          cursor: pointer;
+          border-color: #FFB8B8;
+          box-shadow: 0 0 0 4px rgba(255, 184, 184, 0.1);
         }
 
         .health-tips {
@@ -2085,9 +3634,9 @@ export default function AdCookingClass() {
 
         /* 카메라 버튼 */
         .btn-camera {
-          background: #6c5ce7;
-          color: white;
-          border: none;
+          background: #FFE5E5;
+          color: #2d3436;
+          border: 2px solid #FFB8B8;
           padding: 16px 24px;
           border-radius: 12px;
           font-size: 15px;
@@ -2101,7 +3650,8 @@ export default function AdCookingClass() {
         }
 
         .btn-camera:hover {
-          background: #5f3dc4;
+          background: #FFD0D0;
+          border-color: #FFA0A0;
         }
 
         /* 모달 */
@@ -2266,7 +3816,7 @@ export default function AdCookingClass() {
         .filter-btn {
           flex: 1;
           padding: 12px 20px;
-          border: 2px solid #e9ecef;
+          border: 2px solid #FFB8B8;
           background: white;
           border-radius: 12px;
           font-size: 14px;
@@ -2278,14 +3828,15 @@ export default function AdCookingClass() {
         }
 
         .filter-btn:hover {
-          border-color: #ff6b6b;
-          color: #ff6b6b;
+          border-color: #FFA0A0;
+          color: #2d3436;
+          background: #FFF5F5;
         }
 
         .filter-btn.active {
-          background: #ff6b6b;
-          border-color: #ff6b6b;
-          color: white;
+          background: #FFE5E5;
+          border-color: #FFB8B8;
+          color: #2d3436;
         }
 
         /* 완벽 매칭 배지 */
@@ -2339,16 +3890,6 @@ export default function AdCookingClass() {
           display: inline-flex;
           align-items: center;
           gap: 4px;
-        }
-
-        .purchase-link {
-          color: #1e88e5;
-          display: inline-flex;
-          margin-left: 4px;
-        }
-
-        .purchase-link:hover {
-          color: #1565c0;
         }
 
         .empty-state {
@@ -2595,6 +4136,61 @@ export default function AdCookingClass() {
           background: #fff5f5;
         }
 
+        .meal-item.optimistic {
+          opacity: 0.6;
+          animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .meal-item.loading {
+          pointer-events: none;
+          opacity: 0.7;
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 0.8; }
+        }
+
+        /* 스켈레톤 UI */
+        .skeleton {
+          pointer-events: none;
+          user-select: none;
+        }
+
+        .skeleton-text {
+          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite;
+          border-radius: 4px;
+        }
+
+        .skeleton-icon {
+          width: 40px;
+          height: 40px;
+          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite;
+          border-radius: 8px;
+        }
+
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+
+        .stat-card.skeleton {
+          background: white;
+        }
+
+        .spinning {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
         .meal-info {
           display: flex;
           gap: 20px;
@@ -2635,21 +4231,213 @@ export default function AdCookingClass() {
           display: flex;
           align-items: center;
           justify-content: center;
+          border: 2px solid transparent;
         }
 
-        .rating-icon:hover {
-          background: #f1f3f4;
-          color: #636e72;
+        .rating-like.active {
+          color: #00b894;
+          background: #d5f4e6;
+          border-color: #00b894;
         }
 
-        .rating-icon.active {
-          color: #ff6b6b;
-          background: #fff5f5;
+        .rating-like:hover {
+          border-color: #00b894;
+          color: #00b894;
+        }
+
+        .rating-dislike.active {
+          color: #d63031;
+          background: #ffebee;
+          border-color: #d63031;
+        }
+
+        .rating-dislike:hover {
+          border-color: #d63031;
+          color: #d63031;
         }
 
         .delete-icon:hover {
           background: #ffebee;
           color: #d63031;
+          border-color: #d63031;
+        }
+
+        /* 프로필 페이지 */
+        .profile-page {
+          max-width: 900px;
+          margin: 0 auto;
+          padding: 40px 20px;
+        }
+
+        .profile-container {
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+
+        .profile-section {
+          background: white;
+          padding: 32px;
+          border-radius: 20px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .form-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 20px;
+          margin-top: 20px;
+        }
+
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .form-group label {
+          font-size: 14px;
+          font-weight: 600;
+          color: #2d3436;
+        }
+
+        .form-group input,
+        .form-group select {
+          padding: 12px 16px;
+          border: 2px solid #e1e8ed;
+          border-radius: 12px;
+          font-size: 15px;
+          transition: all 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+          outline: none;
+          border-color: #ff6b6b;
+        }
+
+        .tag-input-group {
+          display: flex;
+          gap: 12px;
+          margin-top: 20px;
+        }
+
+        .tag-input-group input {
+          flex: 1;
+          padding: 12px 16px;
+          border: 2px solid #e1e8ed;
+          border-radius: 12px;
+          font-size: 15px;
+        }
+
+        .tag-input-group input:focus {
+          outline: none;
+          border-color: #ff6b6b;
+        }
+
+        .btn-add {
+          padding: 12px 16px;
+          background: #FFE5E5;
+          color: #2d3436;
+          border: 2px solid #FFB8B8;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .btn-add:hover {
+          background: #FFD0D0;
+          border-color: #FFA0A0;
+          transform: translateY(-2px);
+        }
+
+        .tag-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin-top: 16px;
+        }
+
+        .tag {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+          border-radius: 20px;
+          font-size: 14px;
+          font-weight: 500;
+          color: #2d3436;
+        }
+
+        .tag button {
+          background: none;
+          border: none;
+          padding: 4px;
+          cursor: pointer;
+          color: #636e72;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          transition: all 0.2s;
+        }
+
+        .tag button:hover {
+          background: rgba(0,0,0,0.1);
+          color: #2d3436;
+        }
+
+        .profile-actions {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 16px;
+          margin-top: 20px;
+        }
+
+        .btn-save {
+          padding: 16px 48px;
+          background: linear-gradient(135deg, #ff6b6b 0%, #ff8787 100%);
+          color: white;
+          border: none;
+          border-radius: 16px;
+          font-size: 16px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.3s;
+          box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+        }
+
+        .btn-save:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+        }
+
+        .btn-save:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .save-message {
+          padding: 12px 24px;
+          border-radius: 12px;
+          font-size: 14px;
+          font-weight: 600;
+          text-align: center;
+        }
+
+        .save-message.success {
+          background: #d4edda;
+          color: #155724;
+        }
+
+        .save-message.error {
+          background: #f8d7da;
+          color: #721c24;
         }
 
         @media (max-width: 768px) {
@@ -2715,13 +4503,20 @@ export default function AdCookingClass() {
         }
       `}</style>
 
-      <Navigation />
+      {currentPage === 'main' && <MainPage />}
+      {currentPage === 'login' && <LoginPage />}
       
-      {currentPage === 'home' && <HomePage />}
-      {currentPage === 'recommend' && <RecommendPage />}
-      {currentPage === 'coaching' && <CoachingPage />}
-      {currentPage === 'health' && <HealthPage />}
-      {currentPage === 'history' && <HistoryPage />}
+      {currentPage !== 'main' && currentPage !== 'login' && (
+        <>
+          <Navigation />
+          
+          {currentPage === 'home' && <HomePage />}
+          {currentPage === 'health' && <HealthPage />}
+          {currentPage === 'coaching' && <CoachingPage />}
+          {currentPage === 'history' && <HistoryPage />}
+          {currentPage === 'profile' && <ProfilePage />}
+        </>
+      )}
     </>
   );
 }
