@@ -9,8 +9,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "server": "node server/index.js",
-    "server:dev": "node --watch server/index.js"
+    "server": "node -r dotenv/config server/index.js",
+    "server:dev": "node --watch -r dotenv/config server/index.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
