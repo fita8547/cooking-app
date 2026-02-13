@@ -3,7 +3,7 @@ import { ArrowLeft, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import HealthProfileForm from './HealthProfileForm';
 import { createHealthProfile, getHealthProfile } from '../services/api';
 
-export default function HealthProfilePage({ user, onBack }) {
+export default function HealthProfilePage({ user, onBack, isPremium = false }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState(null);
@@ -71,6 +71,19 @@ export default function HealthProfilePage({ user, onBack }) {
           뒤로
         </button>
         <h1 className="page-title">건강 프로필</h1>
+        <div className="premium-status-badge">
+          {isPremium ? (
+            <>
+              <span className="status-icon">👑</span>
+              <span className="status-text">프리미엄</span>
+            </>
+          ) : (
+            <>
+              <span className="status-icon">🆓</span>
+              <span className="status-text">무료</span>
+            </>
+          )}
+        </div>
       </header>
 
       <div className="page-content">
@@ -189,6 +202,32 @@ export default function HealthProfilePage({ user, onBack }) {
           position: sticky;
           top: 0;
           z-index: 100;
+        }
+
+        .premium-status-badge {
+          margin-left: auto;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          border-radius: 20px;
+          font-size: 13px;
+          font-weight: 700;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .premium-status-badge .status-icon {
+          font-size: 16px;
+        }
+
+        .premium-status-badge:has(.status-text:contains("프리미엄")) {
+          background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+          color: #2d3436;
+        }
+
+        .premium-status-badge:has(.status-text:contains("무료")) {
+          background: #f1f3f5;
+          color: #636e72;
         }
 
         .btn-back {

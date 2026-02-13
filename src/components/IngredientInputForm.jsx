@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Plus, X, Camera } from 'lucide-react';
 
-export default function IngredientInputForm({ onSubmit, onImageUpload, initialIngredients = [], onIngredientsChange }) {
+export default function IngredientInputForm({ onSubmit, onImageUpload, initialIngredients = [], onIngredientsChange, fridgeIngredients = [] }) {
   const [ingredients, setIngredients] = useState(initialIngredients);
   const [currentInput, setCurrentInput] = useState('');
   const [isComposing, setIsComposing] = useState(false);
@@ -90,11 +90,38 @@ export default function IngredientInputForm({ onSubmit, onImageUpload, initialIn
           </div>
           <div className="ingredient-tags">
             {ingredients.map((ing, idx) => (
-              <div key={idx} className="ingredient-tag">
+              <div key={idx} className={`ingredient-tag ${fridgeIngredients.includes(ing) ? 'in-fridge' : ''}`}>
+                {fridgeIngredients.includes(ing) && <span className="fridge-icon">🚪</span>}
                 {ing}
                 <button onClick={() => handleRemove(ing)} className="remove-btn">
                   <X size={16} />
                 </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {fridgeIngredients.length > 0 && (
+        <div className="fridge-ingredients-section">
+          <div className="fridge-header">
+            <span className="fridge-icon">🚪</span>
+            <span>보유한 재료 ({fridgeIngredients.length}개)</span>
+          </div>
+          <div className="fridge-tags">
+            {fridgeIngredients.map((ing, idx) => (
+              <div 
+                key={idx} 
+                className={`fridge-tag ${ingredients.includes(ing) ? 'selected' : ''}`}
+                onClick={() => {
+                  if (!ingredients.includes(ing)) {
+                    const newIngredients = [...ingredients, ing];
+                    updateIngredients(newIngredients);
+                  }
+                }}
+              >
+                {ing}
+                {ingredients.includes(ing) && <span className="check-icon">✓</span>}
               </div>
             ))}
           </div>
@@ -208,6 +235,16 @@ export default function IngredientInputForm({ onSubmit, onImageUpload, initialIn
           color: #2d3436;
         }
 
+        .ingredient-tag.in-fridge {
+          background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+          border: 2px solid #00b894;
+          font-weight: 600;
+        }
+
+        .fridge-icon {
+          font-size: 16px;
+        }
+
         .remove-btn {
           display: flex;
           align-items: center;
@@ -224,6 +261,61 @@ export default function IngredientInputForm({ onSubmit, onImageUpload, initialIn
 
         .remove-btn:hover {
           background: #2d3436;
+        }
+
+        .fridge-ingredients-section {
+          margin-bottom: 24px;
+          padding: 16px;
+          background: #f8f9fa;
+          border-radius: 12px;
+          border: 2px dashed #e9ecef;
+        }
+
+        .fridge-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 12px;
+          font-size: 14px;
+          font-weight: 600;
+          color: #2d3436;
+        }
+
+        .fridge-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .fridge-tag {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 12px;
+          background: white;
+          border: 2px solid #e9ecef;
+          border-radius: 20px;
+          font-size: 14px;
+          color: #2d3436;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .fridge-tag:hover {
+          border-color: var(--primary, #667eea);
+          background: #f1f3f5;
+        }
+
+        .fridge-tag.selected {
+          background: linear-gradient(135deg, var(--primary, #667eea) 0%, var(--primary-dark, #764ba2) 100%);
+          border-color: var(--primary, #667eea);
+          color: white;
+          font-weight: 600;
+        }
+
+        .check-icon {
+          font-size: 12px;
+          font-weight: 700;
         }
 
         .btn-submit {

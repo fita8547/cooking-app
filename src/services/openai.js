@@ -64,11 +64,25 @@ export async function recognizeIngredients(imageFile) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || '재료 인식에 실패했습니다');
+      let errorMessage = '재료 인식에 실패했습니다';
+      try {
+        const error = await response.json();
+        errorMessage = error.error || errorMessage;
+      } catch (e) {
+        // JSON 파싱 실패 시 상태 코드로 에러 메시지 생성
+        errorMessage = `서버 오류 (${response.status}): ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      console.error('JSON 파싱 오류:', e);
+      throw new Error('서버 응답을 처리할 수 없습니다. 이미지가 너무 크거나 형식이 올바르지 않을 수 있습니다.');
+    }
+
     return data.ingredients || [];
   } catch (error) {
     console.error('재료 인식 오류:', error);

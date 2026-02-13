@@ -1,39 +1,86 @@
 import React, { useState, useEffect } from 'react';
+import WelcomePage from './WelcomePage';
 import HomeHub from './HomeHub';
 import RecipeRecommendationPage from './RecipeRecommendationPage';
 import HealthProfilePage from './HealthProfilePage';
 import FridgePage from './FridgePage';
 import MealHistoryPage from './MealHistoryPage';
-import Login from './Login';
 
 export default function AppRouter() {
-  const [currentPage, setCurrentPage] = useState('login');
+  const [currentPage, setCurrentPage] = useState('welcome'); // Welcome 페이지로 시작
   const [user, setUser] = useState(null);
   const [authToken, setAuthToken] = useState(null);
+  const [isGuest, setIsGuest] = useState(false);
   const [ingredientsToRecommend, setIngredientsToRecommend] = useState([]);
 
   useEffect(() => {
-    // 저장된 토큰 확인
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      setAuthToken(token);
-      // 실제로는 토큰으로 사용자 정보를 가져와야 함
+    // 저장된 세션 확인
+    const savedToken = localStorage.getItem('authToken');
+    const savedIsGuest = localStorage.getItem('isGuest') === 'true';
+    
+    if (savedToken) {
+      setAuthToken(savedToken);
+      setIsGuest(savedIsGuest);
+      
+      if (savedIsGuest) {
+        setUser({ name: '게스트', isGuest: true });
+      }
+      
       setCurrentPage('home');
+    }
+
+    // 개발 모드에서 전역 함수 등록 (모든 페이지에서 사용 가능)
+    if (import.meta.env.DEV) {
+      window.resetApp = () => {
+        localStorage.clear();
+        console.log('🔄 앱이 초기화되었습니다. Welcome 페이지로 이동합니다.');
+        location.reload();
+      };
+      
+      console.log('💡 개발자 도구 명령어:');
+      console.log('  - resetApp() : 앱 초기화 (Welcome 페이지로)');
     }
   }, []);
 
+  const handleGuestStart = () => {
+    // 게스트 세션 생성
+    const guestToken = `guest-${Date.now()}`;
+    setAuthToken(guestToken);
+    setUser({ name: '게스트', isGuest: true });
+    setIsGuest(true);
+    
+    localStorage.setItem('authToken', guestToken);
+    localStorage.setItem('isGuest', 'true');
+    
+    setCurrentPage('home');
+  };
+
   const handleLogin = (token, userData) => {
+    // 실제 로그인
     setAuthToken(token);
     setUser(userData);
+    setIsGuest(false);
+    
     localStorage.setItem('authToken', token);
+    localStorage.setItem('isGuest', 'false');
+    
     setCurrentPage('home');
+  };
+
+  const handleShowLogin = () => {
+    // WelcomePage 내부에서 로그인 폼 처리
+    setCurrentPage('welcome');
   };
 
   const handleLogout = () => {
     setAuthToken(null);
     setUser(null);
+    setIsGuest(false);
+    
     localStorage.removeItem('authToken');
-    setCurrentPage('login');
+    localStorage.removeItem('isGuest');
+    
+    setCurrentPage('welcome');
   };
 
   const handleNavigate = (page) => {
@@ -45,9 +92,14 @@ export default function AppRouter() {
     setCurrentPage('recommend');
   };
 
-  // 로그인 페이지
-  if (currentPage === 'login') {
-    return <Login onLogin={handleLogin} />;
+  // Welcome 페이지
+  if (currentPage === 'welcome') {
+    return (
+      <WelcomePage 
+        onGuestStart={handleGuestStart}
+        onLogin={handleLogin}
+      />
+    );
   }
 
   // 홈 페이지
@@ -79,6 +131,8 @@ export default function AppRouter() {
         user={user}
         onBack={() => handleNavigate('home')}
         initialIngredients={ingredientsToRecommend}
+        onNavigateToFridge={() => handleNavigate('fridge')}
+        onNavigateToHealth={() => handleNavigate('health-profile')}
       />
     );
   }

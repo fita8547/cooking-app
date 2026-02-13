@@ -1,7 +1,7 @@
 import React from 'react';
 import { Clock, Flame, Activity, ChefHat, AlertCircle } from 'lucide-react';
 
-export default function RecipeDisplay({ recipes, userTargets }) {
+export default function RecipeDisplay({ recipes, userTargets, onStartCooking }) {
   const exactMatches = recipes.filter(r => r.matchType === 'exact');
   const extendedMatches = recipes.filter(r => r.matchType === 'extended');
 
@@ -9,7 +9,10 @@ export default function RecipeDisplay({ recipes, userTargets }) {
     const isExact = recipe.matchType === 'exact';
     
     return (
-      <div className={`recipe-card ${isExact ? 'exact-match' : 'extended-match'}`}>
+      <div 
+        className={`recipe-card ${isExact ? 'exact-match' : 'extended-match'}`}
+        onClick={() => onStartCooking && onStartCooking(recipe)}
+      >
         <div className="recipe-header">
           <div className="recipe-emoji">{recipe.image || '🍽️'}</div>
           <div className="recipe-title-section">
@@ -137,6 +140,17 @@ export default function RecipeDisplay({ recipes, userTargets }) {
             <p className="rationale-text">{recipe.rationale}</p>
           </div>
         )}
+
+        <button 
+          className="btn-start-cooking"
+          onClick={(e) => {
+            e.stopPropagation(); // 카드 클릭 이벤트와 중복 방지
+            onStartCooking && onStartCooking(recipe);
+          }}
+        >
+          <span className="btn-icon">👨‍🍳</span>
+          <span>요리 시작하기</span>
+        </button>
       </div>
     );
   };
@@ -224,6 +238,7 @@ export default function RecipeDisplay({ recipes, userTargets }) {
           padding: 24px;
           border: 2px solid #e9ecef;
           transition: all 0.2s;
+          cursor: pointer;
         }
 
         .recipe-card:hover {
@@ -464,6 +479,33 @@ export default function RecipeDisplay({ recipes, userTargets }) {
           line-height: 1.6;
           color: #2d3436;
           font-weight: 500;
+        }
+
+        .btn-start-cooking {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 16px;
+          background: linear-gradient(135deg, var(--primary, #667eea) 0%, var(--primary-dark, #764ba2) 100%);
+          color: white;
+          border: none;
+          border-radius: 12px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          margin-top: 16px;
+        }
+
+        .btn-start-cooking:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-start-cooking .btn-icon {
+          font-size: 20px;
         }
 
         .empty-state {

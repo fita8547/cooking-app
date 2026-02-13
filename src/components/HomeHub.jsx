@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Refrigerator, Sparkles, Calendar, User, LogOut, Heart } from 'lucide-react';
+import { Refrigerator, Sparkles, Calendar, User, Heart, LogOut } from 'lucide-react';
 
-export default function HomeHub({ user, onNavigate, onLogout }) {
+export default function HomeHub({ user, onNavigate, onLogout, isPremium = false }) {
   const [ingredientCount, setIngredientCount] = useState(0);
   const [hasHealthProfile, setHasHealthProfile] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -13,7 +13,7 @@ export default function HomeHub({ user, onNavigate, onLogout }) {
   useEffect(() => {
     fetchHomeData();
     fetchDailyInsight();
-  }, []);
+  }, [isPremium]);
 
   const fetchHomeData = async () => {
     try {
@@ -40,6 +40,13 @@ export default function HomeHub({ user, onNavigate, onLogout }) {
   };
 
   const fetchDailyInsight = async () => {
+    // 유료 회원이 아니면 인사이트를 가져오지 않음
+    if (!isPremium) {
+      setDailyInsight('AI가 당신의 식습관을 분석하고 맞춤형 조언을 제공합니다. 프리미엄 기능을 구독하고 건강한 식단 관리를 시작하세요!');
+      setInsightLoading(false);
+      return;
+    }
+
     setInsightLoading(true);
     try {
       const token = localStorage.getItem('authToken');
@@ -92,6 +99,13 @@ export default function HomeHub({ user, onNavigate, onLogout }) {
     }
   };
 
+  const handlePremiumUpgrade = () => {
+    // 결제 페이지로 이동하거나 결제 모달 표시
+    alert('프리미엄 구독 기능은 준비 중입니다.');
+    // 실제로는 결제 페이지로 이동
+    // onNavigate('payment');
+  };
+
   const greeting = user?.name ? `${user.name}님, 내 몸에 맞는 한 끼를 찾아볼까요?` : '내 몸에 맞는 한 끼를 찾아볼까요?';
   const ingredientText = ingredientCount > 0 ? `냉장고 재료 ${ingredientCount}개로` : '냉장고 재료로';
   const healthGoalText = hasHealthProfile ? '건강 목표에 맞춰 추천해드릴게요.' : '맞춤 추천해드릴게요.';
@@ -103,12 +117,27 @@ export default function HomeHub({ user, onNavigate, onLogout }) {
         <div className="header-content">
           <h1 className="app-title">냉장고 요리 도우미</h1>
           <div className="header-actions">
+            <div className="premium-status-badge">
+              {isPremium ? (
+                <>
+                  <span className="status-icon">👑</span>
+                  <span className="status-text">프리미엄</span>
+                </>
+              ) : (
+                <>
+                  <span className="status-icon">🆓</span>
+                  <span className="status-text">무료</span>
+                </>
+              )}
+            </div>
             <button className="btn-icon" onClick={() => onNavigate('profile')} title="프로필">
               <User size={20} />
             </button>
-            <button className="btn-icon" onClick={onLogout} title="로그아웃">
-              <LogOut size={20} />
-            </button>
+            {user?.isGuest && (
+              <button className="btn-icon" onClick={onLogout} title="로그아웃">
+                <LogOut size={20} />
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -145,17 +174,37 @@ export default function HomeHub({ user, onNavigate, onLogout }) {
       {/* AI 코칭 카드 */}
       {dailyInsight && (
         <section className="ai-coaching-section">
-          <div className="coaching-card">
-            <div className="coaching-header">
-              <span className="coaching-icon">💬</span>
-              <h3>오늘의 AI 코칭</h3>
+          <div className={`coaching-card ${!isPremium ? 'premium-locked' : ''}`}>
+            {!isPremium && (
+              <div className="premium-badge">
+                <span className="badge-icon">👑</span>
+                <span className="badge-text">프리미엄</span>
+              </div>
+            )}
+            <div className={`coaching-content ${!isPremium ? 'blurred' : ''}`}>
+              <div className="coaching-header">
+                <span className="coaching-icon">💬</span>
+                <h3>오늘의 AI 코칭</h3>
+              </div>
+              <p className="coaching-message">
+                {insightLoading ? '분석 중...' : dailyInsight}
+              </p>
+              <button onClick={() => onNavigate('meals')} className="btn-coaching-detail">
+                상세 분석 보기 →
+              </button>
             </div>
-            <p className="coaching-message">
-              {insightLoading ? '분석 중...' : dailyInsight}
-            </p>
-            <button onClick={() => onNavigate('meals')} className="btn-coaching-detail">
-              상세 분석 보기 →
-            </button>
+            {!isPremium && (
+              <div className="premium-overlay">
+                <div className="premium-content">
+                  <span className="premium-icon">👑</span>
+                  <h4>프리미엄 기능</h4>
+                  <p>AI 코칭으로 맞춤형 식단 조언을 받아보세요</p>
+                  <button onClick={handlePremiumUpgrade} className="btn-upgrade">
+                    프리미엄 구독하기
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -258,6 +307,51 @@ export default function HomeHub({ user, onNavigate, onLogout }) {
           color: #2d3436;
         }
 
+        .btn-dev-toggle {
+          padding: 8px 16px;
+          background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+          color: #2d3436;
+          border: 2px solid #ffd700;
+          border-radius: 20px;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .btn-dev-toggle:hover {
+          transform: scale(1.05);
+          box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+        }
+
+        .premium-status-badge {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          border-radius: 20px;
+          font-size: 13px;
+          font-weight: 700;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .premium-status-badge .status-icon {
+          font-size: 16px;
+        }
+
+        .premium-status-badge:has(.status-text:contains("프리미엄")) {
+          background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+          color: #2d3436;
+        }
+
+        .premium-status-badge:has(.status-text:contains("무료")) {
+          background: #f1f3f5;
+          color: #636e72;
+        }
+
         .hero-section {
           max-width: 1200px;
           margin: 0 auto;
@@ -354,11 +448,114 @@ export default function HomeHub({ user, onNavigate, onLogout }) {
         }
 
         .coaching-card {
+          position: relative;
           background: var(--gradient-primary);
           border-radius: 20px;
           padding: 32px;
           color: white;
-          box-shadow: 0 8px 24px rgba(255, 140, 66, 0.2);
+          box-shadow: 0 8px 24px rgba(242, 133, 0, 0.2);
+          overflow: visible;
+          min-height: 200px;
+        }
+
+        .coaching-card.premium-locked {
+          background: linear-gradient(135deg, #636e72 0%, #2d3436 100%);
+          overflow: hidden;
+        }
+
+        .premium-badge {
+          position: absolute;
+          top: 16px;
+          right: 16px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          background: rgba(255, 215, 0, 0.95);
+          color: #2d3436;
+          border-radius: 20px;
+          font-size: 14px;
+          font-weight: 700;
+          box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+          z-index: 2;
+        }
+
+        .badge-icon {
+          font-size: 16px;
+        }
+
+        .coaching-content {
+          position: relative;
+          z-index: 1;
+        }
+
+        .coaching-content.blurred {
+          filter: blur(8px);
+          pointer-events: none;
+          user-select: none;
+        }
+
+        .premium-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(0, 0, 0, 0.3);
+          backdrop-filter: blur(2px);
+          z-index: 3;
+          border-radius: 20px;
+        }
+
+        .premium-content {
+          text-align: center;
+          padding: 24px 32px;
+          background: white;
+          border-radius: 20px;
+          color: #2d3436;
+          max-width: 90%;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .premium-icon {
+          font-size: 40px;
+          display: block;
+          margin-bottom: 12px;
+        }
+
+        .premium-content h4 {
+          font-size: 20px;
+          font-weight: 700;
+          margin: 0 0 8px 0;
+          color: #2d3436;
+        }
+
+        .premium-content p {
+          font-size: 14px;
+          color: #636e72;
+          margin: 0 0 20px 0;
+          line-height: 1.5;
+        }
+
+        .btn-upgrade {
+          padding: 12px 24px;
+          background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+          color: #2d3436;
+          border: none;
+          border-radius: 12px;
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s;
+          box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+        }
+
+        .btn-upgrade:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(255, 215, 0, 0.4);
         }
 
         .coaching-header {

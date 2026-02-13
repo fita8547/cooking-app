@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Login from './components/Login';
+import WelcomePage from './components/WelcomePage';
 import QuickHealthInfo from './components/QuickHealthInfo';
 import HomeHub from './components/HomeHub';
 import RecipeRecommendationPage from './components/RecipeRecommendationPage';
@@ -8,17 +8,57 @@ import FridgePage from './components/FridgePage';
 import MealHistoryPage from './components/MealHistoryPage';
 
 export default function AppOnboarding() {
-  const [currentScreen, setCurrentScreen] = useState('login'); // 'login', 'healthInfo', 'home', 'recommend', 'health-profile'
+  const [currentScreen, setCurrentScreen] = useState('welcome'); // 'welcome', 'healthInfo', 'home', 'recommend', 'health-profile'
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
+  const [ingredientsToRecommend, setIngredientsToRecommend] = useState([]);
+  const [isPremium, setIsPremium] = useState(false); // 전역 프리미엄 상태
 
   useEffect(() => {
     // 앱 시작 시 저장된 토큰 확인
     const savedToken = localStorage.getItem('authToken');
+    const savedIsGuest = localStorage.getItem('isGuest') === 'true';
+    
     if (savedToken) {
-      restoreSession(savedToken);
+      if (savedIsGuest) {
+        // 게스트 세션 복구
+        setUser({ name: '게스트', isGuest: true });
+        setToken(savedToken);
+        setCurrentScreen('home');
+      } else {
+        // 실제 로그인 세션 복구
+        restoreSession(savedToken);
+      }
     }
-  }, []);
+
+    // 개발 모드에서 전역 프리미엄 토글 함수 노출
+    if (import.meta.env.DEV) {
+      window.togglePremium = () => {
+        setIsPremium(prev => {
+          const newValue = !prev;
+          console.log(`🔄 전역 프리미엄 상태 변경: ${newValue ? '유료 ✅' : '무료 ❌'}`);
+          return newValue;
+        });
+      };
+      
+      window.setPremium = (value) => {
+        setIsPremium(value);
+        console.log(`🔄 전역 프리미엄 상태 설정: ${value ? '유료 ✅' : '무료 ❌'}`);
+      };
+      
+      window.resetApp = () => {
+        localStorage.clear();
+        location.reload();
+      };
+      
+      console.log('💡 전역 개발자 도구:');
+      console.log('  - togglePremium() : 무료/유료 전환');
+      console.log('  - setPremium(true) : 유료로 설정');
+      console.log('  - setPremium(false) : 무료로 설정');
+      console.log('  - resetApp() : 앱 초기화');
+      console.log(`  - 현재 상태: ${isPremium ? '유료 ✅' : '무료 ❌'}`);
+    }
+  }, [isPremium]);
 
   const restoreSession = async (savedToken) => {
     try {
@@ -50,16 +90,35 @@ export default function AppOnboarding() {
     }
   };
 
-  const handleLoginSuccess = (authData) => {
+  const handleGuestStart = () => {
+    // 게스트 세션 생성
+    const guestToken = `guest-${Date.now()}`;
+    setToken(guestToken);
+    setUser({ name: '게스트', isGuest: true });
+    
+    localStorage.setItem('authToken', guestToken);
+    localStorage.setItem('isGuest', 'true');
+    
+    setCurrentScreen('home');
+  };
+
+  const handleLogin = (authData) => {
     setUser(authData.user);
     setToken(authData.token);
     
-    // 온보딩 완료 여부에 따라 다음 화면 결정
+    localStorage.setItem('authToken', authData.token);
+    localStorage.setItem('isGuest', 'false');
+    
+    // 온보딩 완료 여부에 따라 화면 결정
     if (authData.onboardingComplete) {
       setCurrentScreen('home');
     } else {
       setCurrentScreen('healthInfo');
     }
+  };
+
+  const handleLoginSuccess = (authData) => {
+    handleLogin(authData);
   };
 
   const handleHealthInfoComplete = (data) => {
@@ -78,14 +137,25 @@ export default function AppOnboarding() {
 
   const handleLogout = () => {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('isGuest');
     setUser(null);
     setToken(null);
-    setCurrentScreen('login');
+    setCurrentScreen('welcome');
+  };
+
+  const handleNavigateToRecommendWithIngredients = (ingredients) => {
+    setIngredientsToRecommend(ingredients);
+    setCurrentScreen('recommend');
   };
 
   // 화면 렌더링
-  if (currentScreen === 'login') {
-    return <Login onLoginSuccess={handleLoginSuccess} />;
+  if (currentScreen === 'welcome') {
+    return (
+      <WelcomePage 
+        onGuestStart={handleGuestStart}
+        onLogin={handleLogin}
+      />
+    );
   }
 
   if (currentScreen === 'healthInfo') {
@@ -104,24 +174,7 @@ export default function AppOnboarding() {
         user={user}
         onNavigate={handleNavigate}
         onLogout={handleLogout}
-      />
-    );
-  }
-
-  if (currentScreen === 'recommend') {
-    return (
-      <RecipeRecommendationPage
-        user={user}
-        onBack={() => setCurrentScreen('home')}
-      />
-    );
-  }
-
-  if (currentScreen === 'health-profile' || currentScreen === 'profile') {
-    return (
-      <HealthProfilePage
-        user={user}
-        onBack={() => setCurrentScreen('home')}
+        isPremium={isPremium}
       />
     );
   }
@@ -131,7 +184,31 @@ export default function AppOnboarding() {
       <FridgePage
         user={user}
         onBack={() => setCurrentScreen('home')}
-        onNavigateToRecommend={() => setCurrentScreen('recommend')}
+        onNavigateToRecommend={handleNavigateToRecommendWithIngredients}
+        isPremium={isPremium}
+      />
+    );
+  }
+
+  if (currentScreen === 'recommend') {
+    return (
+      <RecipeRecommendationPage
+        user={user}
+        onBack={() => setCurrentScreen('home')}
+        initialIngredients={ingredientsToRecommend}
+        onNavigateToFridge={() => setCurrentScreen('fridge')}
+        onNavigateToHealth={() => setCurrentScreen('health-profile')}
+        isPremium={isPremium}
+      />
+    );
+  }
+
+  if (currentScreen === 'health-profile' || currentScreen === 'profile') {
+    return (
+      <HealthProfilePage
+        user={user}
+        onBack={() => setCurrentScreen('home')}
+        isPremium={isPremium}
       />
     );
   }
@@ -141,6 +218,7 @@ export default function AppOnboarding() {
       <MealHistoryPage
         user={user}
         onBack={() => setCurrentScreen('home')}
+        isPremium={isPremium}
       />
     );
   }

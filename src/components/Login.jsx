@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ChefHat, Loader2 } from 'lucide-react';
 
-export default function Login({ onLoginSuccess }) {
+export default function Login({ onLogin, onBack }) {
   const [mode, setMode] = useState('login'); // 'login' or 'register'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -49,12 +49,7 @@ export default function Login({ onLoginSuccess }) {
 
       if (response.ok) {
         // 로그인/회원가입 성공
-        localStorage.setItem('authToken', data.token);
-        onLoginSuccess({
-          user: data.user,
-          token: data.token,
-          onboardingComplete: data.user.onboardingComplete || false
-        });
+        onLogin(data.token, data.user);
       } else {
         setError(data.error || '요청에 실패했습니다');
       }
@@ -68,6 +63,12 @@ export default function Login({ onLoginSuccess }) {
   return (
     <div className="login-container">
       <div className="login-card">
+        {onBack && (
+          <button onClick={onBack} className="btn-back-to-welcome">
+            ← 돌아가기
+          </button>
+        )}
+        
         <div className="login-header">
           <div className="logo">
             <ChefHat size={48} />
@@ -198,6 +199,27 @@ export default function Login({ onLoginSuccess }) {
           width: 100%;
           max-width: 440px;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          position: relative;
+        }
+
+        .btn-back-to-welcome {
+          position: absolute;
+          top: 20px;
+          left: 20px;
+          padding: 8px 16px;
+          background: transparent;
+          border: 1px solid #e9ecef;
+          border-radius: 8px;
+          color: #636e72;
+          font-size: 14px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .btn-back-to-welcome:hover {
+          background: #f1f3f5;
+          border-color: var(--primary, #ff8c42);
+          color: var(--primary, #ff8c42);
         }
 
         .login-header {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Calendar, TrendingUp, Heart, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Calendar, TrendingUp, Heart, ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown } from 'lucide-react';
 
-export default function MealHistoryPage({ user, onBack }) {
+export default function MealHistoryPage({ user, onBack, isPremium = false }) {
   const [mealHistory, setMealHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -14,7 +14,7 @@ export default function MealHistoryPage({ user, onBack }) {
   useEffect(() => {
     loadMealHistory();
     loadWeeklyAnalysis();
-  }, []);
+  }, [isPremium]);
 
   const loadMealHistory = async () => {
     try {
@@ -31,14 +31,37 @@ export default function MealHistoryPage({ user, onBack }) {
       console.error('Failed to load meal history:', err);
       // 목업 데이터 사용
       setMealHistory([
-        { id: 1, date: '2026-02-10', name: '김치찌개', rating: 'like', calories: 450, protein: 25, carbs: 35, fat: 18 },
-        { id: 2, date: '2026-02-09', name: '샐러드 볼', rating: 'like', calories: 320, protein: 30, carbs: 15, fat: 12 },
-        { id: 3, date: '2026-02-08', name: '된장찌개', rating: 'neutral', calories: 280, protein: 15, carbs: 30, fat: 8 },
-        { id: 4, date: '2026-02-07', name: '불고기', rating: 'like', calories: 520, protein: 35, carbs: 28, fat: 22 },
-        { id: 5, date: '2026-02-06', name: '계란말이', rating: 'like', calories: 180, protein: 12, carbs: 3, fat: 14 },
+        { id: 1, date: '2026-02-10', name: '김치찌개', feedback: 'like', calories: 450, protein: 25, carbs: 35, fat: 18 },
+        { id: 2, date: '2026-02-09', name: '샐러드 볼', feedback: 'like', calories: 320, protein: 30, carbs: 15, fat: 12 },
+        { id: 3, date: '2026-02-08', name: '된장찌개', feedback: null, calories: 280, protein: 15, carbs: 30, fat: 8 },
+        { id: 4, date: '2026-02-07', name: '불고기', feedback: 'like', calories: 520, protein: 35, carbs: 28, fat: 22 },
+        { id: 5, date: '2026-02-06', name: '계란말이', feedback: 'dislike', calories: 180, protein: 12, carbs: 3, fat: 14 },
       ]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFeedbackChange = async (mealId, newFeedback) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      await fetch(`${API_BASE_URL}/meals/${mealId}/feedback`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ feedback: newFeedback })
+      });
+      
+      // 로컬 상태 업데이트
+      setMealHistory(prev => prev.map(meal => 
+        meal.id === mealId || meal._id === mealId
+          ? { ...meal, feedback: newFeedback }
+          : meal
+      ));
+    } catch (err) {
+      console.error('Failed to update feedback:', err);
     }
   };
 
@@ -189,55 +212,90 @@ export default function MealHistoryPage({ user, onBack }) {
           뒤로
         </button>
         <h1 className="page-title">식사 기록</h1>
+        <div className="premium-status-badge">
+          {isPremium ? (
+            <>
+              <span className="status-icon">👑</span>
+              <span className="status-text">프리미엄</span>
+            </>
+          ) : (
+            <>
+              <span className="status-icon">🆓</span>
+              <span className="status-text">무료</span>
+            </>
+          )}
+        </div>
       </header>
 
       <div className="page-content">
         {/* AI 주간 분석 */}
         {weeklyAnalysis && (
-          <section className="ai-analysis-section">
+          <section className={`ai-analysis-section ${!isPremium ? 'premium-locked' : ''}`}>
+            {!isPremium && (
+              <div className="premium-badge">
+                <span className="badge-icon">👑</span>
+                <span className="badge-text">프리미엄</span>
+              </div>
+            )}
+            
             <div className="section-header">
               <span className="ai-icon">🤖</span>
               <h2>AI 주간 분석</h2>
             </div>
             
-            {analysisLoading ? (
-              <div className="analysis-loading">분석 중...</div>
-            ) : (
-              <div className="analysis-content">
-                <div className="analysis-summary">
-                  <p>{weeklyAnalysis.summary}</p>
-                </div>
+            <div className={`analysis-wrapper ${!isPremium ? 'blurred' : ''}`}>
+              {analysisLoading ? (
+                <div className="analysis-loading">분석 중...</div>
+              ) : (
+                <div className="analysis-content">
+                  <div className="analysis-summary">
+                    <p>{weeklyAnalysis.summary}</p>
+                  </div>
 
-                <div className="analysis-grid">
-                  <div className="analysis-card strengths">
-                    <h4>👍 잘하고 있어요</h4>
-                    <ul>
-                      {weeklyAnalysis.strengths?.map((item, idx) => (
-                        <li key={idx}>{item}</li>
+                  <div className="analysis-grid">
+                    <div className="analysis-card strengths">
+                      <h4>👍 잘하고 있어요</h4>
+                      <ul>
+                        {weeklyAnalysis.strengths?.map((item, idx) => (
+                          <li key={idx}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="analysis-card improvements">
+                      <h4>💡 개선하면 좋아요</h4>
+                      <ul>
+                        {weeklyAnalysis.improvements?.map((item, idx) => (
+                          <li key={idx}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="recommendations">
+                    <h4>📋 이번 주 추천</h4>
+                    <div className="recommendation-list">
+                      {weeklyAnalysis.recommendations?.map((item, idx) => (
+                        <div key={idx} className="recommendation-item">
+                          <span className="rec-number">{idx + 1}</span>
+                          <span className="rec-text">{item}</span>
+                        </div>
                       ))}
-                    </ul>
-                  </div>
-
-                  <div className="analysis-card improvements">
-                    <h4>💡 개선하면 좋아요</h4>
-                    <ul>
-                      {weeklyAnalysis.improvements?.map((item, idx) => (
-                        <li key={idx}>{item}</li>
-                      ))}
-                    </ul>
+                    </div>
                   </div>
                 </div>
-
-                <div className="recommendations">
-                  <h4>📋 이번 주 추천</h4>
-                  <div className="recommendation-list">
-                    {weeklyAnalysis.recommendations?.map((item, idx) => (
-                      <div key={idx} className="recommendation-item">
-                        <span className="rec-number">{idx + 1}</span>
-                        <span className="rec-text">{item}</span>
-                      </div>
-                    ))}
-                  </div>
+              )}
+            </div>
+            
+            {!isPremium && (
+              <div className="premium-overlay">
+                <div className="premium-content">
+                  <span className="premium-icon">👑</span>
+                  <h4>프리미엄 기능</h4>
+                  <p>AI 주간 분석으로 식습관을 개선하세요</p>
+                  <button className="btn-upgrade">
+                    프리미엄 구독하기
+                  </button>
                 </div>
               </div>
             )}
@@ -301,7 +359,22 @@ export default function MealHistoryPage({ user, onBack }) {
                       <span className="meal-name">{meal.name}</span>
                       <span className="meal-calories">{meal.calories}kcal</span>
                     </div>
-                    {meal.rating === 'like' && <span className="meal-rating">❤️</span>}
+                    <div className="meal-feedback">
+                      <button
+                        className={`btn-feedback-small ${meal.feedback === 'like' ? 'active' : ''}`}
+                        onClick={() => handleFeedbackChange(meal.id || meal._id, meal.feedback === 'like' ? null : 'like')}
+                        title="좋아요"
+                      >
+                        <ThumbsUp size={16} />
+                      </button>
+                      <button
+                        className={`btn-feedback-small ${meal.feedback === 'dislike' ? 'active' : ''}`}
+                        onClick={() => handleFeedbackChange(meal.id || meal._id, meal.feedback === 'dislike' ? null : 'dislike')}
+                        title="별로예요"
+                      >
+                        <ThumbsDown size={16} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -424,6 +497,32 @@ export default function MealHistoryPage({ user, onBack }) {
           z-index: 100;
         }
 
+        .premium-status-badge {
+          margin-left: auto;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          border-radius: 20px;
+          font-size: 13px;
+          font-weight: 700;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .premium-status-badge .status-icon {
+          font-size: 16px;
+        }
+
+        .premium-status-badge:has(.status-text:contains("프리미엄")) {
+          background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+          color: #2d3436;
+        }
+
+        .premium-status-badge:has(.status-text:contains("무료")) {
+          background: #f1f3f5;
+          color: #636e72;
+        }
+
         .btn-back {
           display: flex;
           align-items: center;
@@ -473,8 +572,104 @@ export default function MealHistoryPage({ user, onBack }) {
         }
 
         .ai-analysis-section {
+          position: relative;
           background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
           border: 2px solid #667eea;
+        }
+
+        .ai-analysis-section.premium-locked {
+          background: linear-gradient(135deg, #636e72 0%, #2d3436 100%);
+          border-color: #ffd700;
+        }
+
+        .premium-badge {
+          position: absolute;
+          top: 16px;
+          right: 16px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          background: rgba(255, 215, 0, 0.95);
+          color: #2d3436;
+          border-radius: 20px;
+          font-size: 14px;
+          font-weight: 700;
+          box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+          z-index: 2;
+        }
+
+        .badge-icon {
+          font-size: 16px;
+        }
+
+        .analysis-wrapper {
+          position: relative;
+        }
+
+        .analysis-wrapper.blurred {
+          filter: blur(8px);
+          pointer-events: none;
+          user-select: none;
+        }
+
+        .premium-overlay {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 3;
+        }
+
+        .premium-content {
+          text-align: center;
+          padding: 32px;
+          background: white;
+          border-radius: 20px;
+          color: #2d3436;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+          max-width: 400px;
+        }
+
+        .premium-icon {
+          font-size: 48px;
+          display: block;
+          margin-bottom: 16px;
+        }
+
+        .premium-content h4 {
+          font-size: 24px;
+          font-weight: 700;
+          margin: 0 0 12px 0;
+          color: #2d3436;
+        }
+
+        .premium-content p {
+          font-size: 16px;
+          color: #636e72;
+          margin: 0 0 24px 0;
+          line-height: 1.5;
+        }
+
+        .btn-upgrade {
+          padding: 16px 32px;
+          background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+          color: #2d3436;
+          border: none;
+          border-radius: 12px;
+          font-size: 16px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s;
+          box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+        }
+
+        .btn-upgrade:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(255, 215, 0, 0.4);
         }
 
         .ai-icon {
@@ -780,6 +975,37 @@ export default function MealHistoryPage({ user, onBack }) {
 
         .meal-rating {
           font-size: 20px;
+        }
+
+        .meal-feedback {
+          display: flex;
+          gap: 8px;
+        }
+
+        .btn-feedback-small {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 36px;
+          height: 36px;
+          background: white;
+          border: 2px solid #e9ecef;
+          border-radius: 8px;
+          color: #636e72;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .btn-feedback-small:hover {
+          border-color: var(--primary, #667eea);
+          color: var(--primary, #667eea);
+          transform: scale(1.1);
+        }
+
+        .btn-feedback-small.active {
+          background: linear-gradient(135deg, var(--primary, #667eea) 0%, var(--primary-dark, #764ba2) 100%);
+          border-color: var(--primary, #667eea);
+          color: white;
         }
 
         /* 트렌드 차트 */
