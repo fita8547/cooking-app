@@ -1,0 +1,12 @@
+# 애드쿠킹클래스 - AI 요리 도우미
+# https://cooking-app-eight.vercel.app
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://cooking-app-eight.vercel.app/sitemap.xml
+
+# 크롤링 제외 경로
+Disallow: /api/
+Disallow: /uploads/
