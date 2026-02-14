@@ -1,6 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ChefHat, Refrigerator, Heart, Clock, User, Sparkles, Flame, Leaf, AlertCircle, Camera, Plus, Minus, ThumbsUp, ThumbsDown, Calendar, TrendingUp, X, Loader2 } from 'lucide-react';
 import { generateRecipes, recognizeIngredients, isApiKeyConfigured } from './services/openai';
+
+// 재료 입력 컴포넌트 (완전히 독립적인 uncontrolled input)
+const IngredientInput = React.memo(React.forwardRef(({ onAdd }, ref) => {
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const value = ref.current?.value.trim();
+      if (value) {
+        onAdd(value);
+        ref.current.value = '';
+      }
+    }
+  };
+
+  return (
+    <input
+      ref={ref}
+      type="text"
+      onKeyDown={handleKeyDown}
+      placeholder="재료를 입력하세요 (예: 김치, 돼지고기)"
+      className="input-field"
+      autoComplete="off"
+      defaultValue=""
+      style={{
+        flex: 1,
+        padding: '12px 16px',
+        fontSize: '16px',
+        border: '2px solid #FFB8B8',
+        borderRadius: '12px',
+        outline: 'none'
+      }}
+    />
+  );
+}));
 
 export default function AdCookingClass() {
   const [currentPage, setCurrentPage] = useState('main'); // 'login' → 'main'으로 변경
@@ -21,8 +55,19 @@ export default function AdCookingClass() {
   const [verificationCode, setVerificationCode] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
   const [isPremiumUser, setIsPremiumUser] = useState(false); // 유료 사용자 여부
+  
+  // 결제 관련 상태
+  const [paymentForm, setPaymentForm] = useState({
+    email: '',
+    cardNumber: '',
+    expiryDate: '',
+    cvc: '',
+    cardholderName: '',
+    country: 'KR'
+  });
   const [ingredients, setIngredients] = useState([]);
   const [inputIngredient, setInputIngredient] = useState('');
+  const isComposingRef = useRef(false); // 한글 입력 조합 중 여부 (ref로 변경)
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [filterMode, setFilterMode] = useState('exact'); // 'exact' or 'partial'
@@ -82,6 +127,16 @@ export default function AdCookingClass() {
       fetchMealHistory();
     }
   }, [isLoggedIn]);
+
+  // URL 파라미터로 결제 성공 확인
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('payment') === 'success') {
+      setCurrentPage('payment-success');
+      // URL에서 파라미터 제거
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   // 로그인
   const handleLogin = async (e) => {
@@ -448,12 +503,13 @@ export default function AdCookingClass() {
     }
   ];
 
-  const addIngredient = () => {
-    if (inputIngredient.trim() && !ingredients.includes(inputIngredient.trim())) {
-      setIngredients([...ingredients, inputIngredient.trim()]);
+  const addIngredient = useCallback((value) => {
+    const ingredient = value || inputIngredient;
+    if (ingredient.trim() && !ingredients.includes(ingredient.trim())) {
+      setIngredients([...ingredients, ingredient.trim()]);
       setInputIngredient('');
     }
-  };
+  }, [inputIngredient, ingredients]);
 
   const removeIngredient = (ing) => {
     setIngredients(ingredients.filter(i => i !== ing));
@@ -542,12 +598,6 @@ export default function AdCookingClass() {
       return;
     }
 
-    // API 키 확인
-    if (!isApiKeyConfigured()) {
-      alert('OpenAI API 키가 설정되지 않았습니다. .env 파일에 VITE_OPENAI_API_KEY를 설정해주세요.');
-      return;
-    }
-
     setIsLoadingRecipes(true);
     setError(null);
 
@@ -569,6 +619,11 @@ export default function AdCookingClass() {
         return {
           ...recipe,
           id: Date.now() + index,
+          // nutrition 객체에서 칼로리 추출
+          calories: recipe.nutrition?.calories || recipe.calories || 0,
+          protein: recipe.nutrition?.protein || recipe.protein || 0,
+          carbs: recipe.nutrition?.carbs || recipe.carbs || 0,
+          fat: recipe.nutrition?.fat || recipe.fat || 0,
           matchedIngredients: recipeIngredients
             .filter(ing => ing.isAvailable)
             .map(ing => ing.name),
@@ -878,12 +933,7 @@ export default function AdCookingClass() {
             
             <button 
               className="btn-pro-subscribe"
-              onClick={() => {
-                // TODO: Polar Product ID를 여기에 입력하세요
-                // 예: const productId = 'prod_abc123xyz';
-                const productId = 'YOUR_PRODUCT_ID_HERE';
-                window.open(`https://polar.sh/adcookingclass/checkout/${productId}`, '_blank');
-              }}
+              onClick={() => setCurrentPage('checkout')}
             >
               <span className="pro-badge-icon">⭐</span>
               Pro 구독하기 - $3/월
@@ -936,29 +986,6 @@ export default function AdCookingClass() {
   const LoginPage = () => {
     return (
       <div className="login-container">
-        <button 
-          type="button"
-          className="btn-back-to-main"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('메인으로 버튼 클릭됨 - currentPage를 main으로 변경');
-            setCurrentPage('main');
-            console.log('setCurrentPage 실행 완료');
-          }}
-          style={{
-            position: 'fixed',
-            top: '40px',
-            left: '40px',
-            zIndex: 10000,
-            cursor: 'pointer'
-          }}
-          onMouseEnter={() => console.log('버튼에 마우스 올림')}
-          onMouseDown={() => console.log('버튼 마우스 다운')}
-        >
-          ← 메인으로
-        </button>
-        
         <div className="login-card">
           <div className="login-header">
             <ChefHat size={48} />
@@ -1061,11 +1088,231 @@ export default function AdCookingClass() {
     );
   };
 
+  // 결제 페이지
+  const CheckoutPage = () => {
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [email, setEmail] = useState('');
+
+    const handleSubscribe = async () => {
+      if (!email || !email.includes('@')) {
+        alert('올바른 이메일 주소를 입력해주세요.');
+        return;
+      }
+
+      setIsProcessing(true);
+
+      try {
+        console.log('🔄 Stripe Checkout 생성 요청...');
+        const response = await fetch(`${API_BASE_URL}/stripe/create-checkout-session`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: email
+          })
+        });
+
+        console.log('📡 응답 상태:', response.status);
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('❌ 서버 오류:', errorData);
+          throw new Error(errorData.error || '결제 세션 생성에 실패했습니다');
+        }
+
+        const data = await response.json();
+        console.log('✅ Checkout 데이터:', data);
+        
+        if (data.url) {
+          console.log('🔗 리다이렉트 URL:', data.url);
+          // Stripe 결제 페이지로 리다이렉트
+          window.location.href = data.url;
+        } else if (data.demo) {
+          // 데모 모드
+          console.log('⚠️  데모 모드');
+          window.location.href = data.url;
+        } else {
+          throw new Error('결제 URL을 받지 못했습니다');
+        }
+      } catch (error) {
+        console.error('💥 결제 오류:', error);
+        alert(`결제 페이지로 이동하는 중 오류가 발생했습니다.\n\n오류: ${error.message}\n\n다시 시도해주세요.`);
+        setIsProcessing(false);
+      }
+    };
+
+    return (
+      <div className="checkout-page">
+        <div className="checkout-container">
+          <div className="checkout-left">
+            <button 
+              onClick={() => setCurrentPage('main')}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '24px',
+                cursor: 'pointer',
+                marginBottom: '20px',
+                color: '#fff'
+              }}
+            >
+              ←
+            </button>
+            <h1>애드쿠킹클래스 Premium</h1>
+            <p style={{color: '#888', marginTop: '8px'}}>스마트 요리 보조 서비스입니다.</p>
+            
+            <div style={{marginTop: '40px', padding: '20px', background: '#1a1a1a', borderRadius: '12px'}}>
+              <div style={{fontSize: '32px', fontWeight: 'bold'}}>
+                $3<span style={{fontSize: '16px', fontWeight: 'normal'}}>/mo</span>
+              </div>
+              <p style={{color: '#aaa', marginTop: '12px', fontSize: '14px'}}>
+                매월 자동 결제 • 언제든지 취소 가능
+              </p>
+            </div>
+
+            <div style={{marginTop: '32px'}}>
+              <h3 style={{marginBottom: '16px'}}>Pro 혜택</h3>
+              <ul style={{color: '#aaa', lineHeight: '2'}}>
+                <li>✅ AI 맞춤 레시피 무제한</li>
+                <li>✅ 식단 기록 및 분석</li>
+                <li>✅ 냉장고 재료 AI 인식</li>
+                <li>✅ 건강 프로필 기반 추천</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="checkout-right">
+            <div style={{padding: '20px 0'}}>
+              <h2 style={{marginBottom: '24px', fontSize: '24px'}}>Pro 구독 시작하기</h2>
+              
+              <div className="form-group" style={{marginBottom: '24px'}}>
+                <label style={{display: 'block', marginBottom: '8px', color: '#aaa'}}>
+                  이메일 주소
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1px solid #333',
+                    background: '#1a1a1a',
+                    color: '#fff',
+                    fontSize: '16px'
+                  }}
+                />
+                <p style={{color: '#666', fontSize: '12px', marginTop: '8px'}}>
+                  결제 확인 및 영수증을 받을 이메일 주소입니다.
+                </p>
+              </div>
+
+              <p style={{color: '#aaa', marginBottom: '24px', lineHeight: '1.6', fontSize: '14px'}}>
+                안전한 결제를 위해 Stripe 결제 페이지로 이동합니다.<br/>
+                카드 정보는 안전하게 암호화되어 처리됩니다.
+              </p>
+
+              <button
+                onClick={handleSubscribe}
+                disabled={isProcessing || !email}
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  background: isProcessing || !email ? '#666' : '#0066FF',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  cursor: isProcessing || !email ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 size={20} className="spinning" />
+                    처리 중...
+                  </>
+                ) : (
+                  '구독하기 ($3/월)'
+                )}
+              </button>
+
+              <p style={{color: '#666', fontSize: '12px', marginTop: '16px', textAlign: 'center'}}>
+                언제든지 구독을 취소할 수 있습니다.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // 결제 성공 페이지
+  const PaymentSuccessPage = () => {
+    return (
+      <div className="payment-success-page">
+        <div className="success-container">
+          <div className="success-icon">✓</div>
+          <h1>결제가 완료되었습니다!</h1>
+          <p>애드쿠킹클래스 Pro 구독을 시작합니다.</p>
+          
+          <div className="success-details">
+            <div className="detail-row">
+              <span>구독 플랜</span>
+              <strong>Pro - $3/월</strong>
+            </div>
+            <div className="detail-row">
+              <span>다음 결제일</span>
+              <strong>{new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR')}</strong>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              setIsPremiumUser(true);
+              setCurrentPage('home');
+            }}
+            style={{
+              marginTop: '32px',
+              padding: '16px 48px',
+              background: '#FFB8B8',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '12px',
+              fontSize: '18px',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            시작하기
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // 홈 페이지 (식단관리)
   const HomePage = () => {
-    const recommendedRecipes = getRecommendedRecipes();
-    const targetCalories = calculateTargetCalories();
+    const ingredientInputRef = useRef(null);
+    const recommendedRecipes = useMemo(() => getRecommendedRecipes(), [ingredients, healthProfile]);
+    const targetCalories = useMemo(() => calculateTargetCalories(), [healthProfile]);
     const hasHealthProfile = healthProfile.age && healthProfile.gender && healthProfile.height && healthProfile.weight;
+    
+    const handleAddClick = () => {
+      const value = ingredientInputRef.current?.value.trim();
+      if (value) {
+        addIngredient(value);
+        ingredientInputRef.current.value = '';
+      }
+    };
     
     return (
       <div className="home-page">
@@ -1086,7 +1333,17 @@ export default function AdCookingClass() {
               <button 
                 className="btn-secondary"
                 onClick={() => setCurrentPage('health')}
-                style={{marginTop: '16px'}}
+                style={{
+                  marginTop: '16px',
+                  background: '#FFE5E5',
+                  border: '2px solid #FFB8B8',
+                  color: '#333',
+                  fontWeight: '600',
+                  padding: '12px 24px',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  fontSize: '16px'
+                }}
               >
                 건강 프로필 입력하기
               </button>
@@ -1099,19 +1356,8 @@ export default function AdCookingClass() {
         <div className="ingredient-input-section">
           <h2 className="section-title">냉장고 재료 입력</h2>
           <div className="input-group">
-            <input
-              type="text"
-              value={inputIngredient}
-              onChange={(e) => setInputIngredient(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                  addIngredient();
-                }
-              }}
-              placeholder="재료를 입력하세요 (예: 김치, 돼지고기)"
-              className="input-field"
-            />
-            <button onClick={addIngredient} className="btn-add">추가</button>
+            <IngredientInput ref={ingredientInputRef} onAdd={addIngredient} />
+            <button onClick={handleAddClick} className="btn-add">추가</button>
             <button onClick={() => setShowImageUpload(true)} className="btn-camera">
               <Camera size={20} />
               촬영
@@ -1212,6 +1458,23 @@ export default function AdCookingClass() {
                 className="btn-generate-ai"
                 onClick={generateAIRecipes}
                 disabled={isLoadingRecipes}
+                style={{
+                  marginTop: '24px',
+                  background: '#FFE5E5',
+                  border: '2px solid #FFB8B8',
+                  color: '#333',
+                  fontWeight: '600',
+                  padding: '12px 24px',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  transition: 'all 0.2s'
+                }}
               >
                 {isLoadingRecipes ? (
                   <>
@@ -1833,7 +2096,6 @@ export default function AdCookingClass() {
             <div className="premium-icon">🔒</div>
             <h3>유료 기능입니다</h3>
             <p>식사 기록 저장 및 조회는 유료 기능입니다.</p>
-            <p>관리자 계정(admin/admin1234)으로 로그인하거나</p>
             <p>유료 플랜을 구매해주세요.</p>
           </div>
         </div>
@@ -2658,12 +2920,6 @@ export default function AdCookingClass() {
         `}</style>
         <div className="login-container">
           <div className="login-card">
-            <button 
-              className="btn-back-to-main"
-              onClick={() => setCurrentPage('main')}
-            >
-              ← 메인으로
-            </button>
             
             <div className="login-header">
               <ChefHat size={48} />
@@ -4501,12 +4757,143 @@ export default function AdCookingClass() {
             flex-direction: column;
           }
         }
+
+        /* 결제 페이지 스타일 */
+        .checkout-page {
+          min-height: 100vh;
+          background: #000;
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 40px 20px;
+        }
+
+        .checkout-container {
+          max-width: 1200px;
+          width: 100%;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 60px;
+        }
+
+        .checkout-left h1 {
+          font-size: 28px;
+          margin-bottom: 8px;
+        }
+
+        .checkout-right {
+          background: #0a0a0a;
+          padding: 40px;
+          border-radius: 16px;
+          border: 1px solid #222;
+        }
+
+        .form-group {
+          margin-bottom: 16px;
+        }
+
+        .form-group label {
+          display: block;
+          margin-bottom: 8px;
+          color: #aaa;
+          font-size: 14px;
+        }
+
+        .payment-methods {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        /* 결제 성공 페이지 스타일 */
+        .payment-success-page {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 40px 20px;
+        }
+
+        .success-container {
+          background: white;
+          padding: 60px 40px;
+          border-radius: 24px;
+          text-align: center;
+          max-width: 500px;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+        }
+
+        .success-icon {
+          width: 80px;
+          height: 80px;
+          background: #4CAF50;
+          color: white;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 48px;
+          margin: 0 auto 24px;
+        }
+
+        .success-container h1 {
+          font-size: 32px;
+          margin-bottom: 12px;
+          color: #333;
+        }
+
+        .success-container p {
+          color: #666;
+          font-size: 18px;
+          margin-bottom: 32px;
+        }
+
+        .success-details {
+          background: #f8f8f8;
+          padding: 24px;
+          border-radius: 12px;
+          margin-bottom: 24px;
+        }
+
+        .detail-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 12px 0;
+          border-bottom: 1px solid #e0e0e0;
+        }
+
+        .detail-row:last-child {
+          border-bottom: none;
+        }
+
+        .detail-row span {
+          color: #666;
+        }
+
+        .detail-row strong {
+          color: #333;
+        }
+
+        @media (max-width: 768px) {
+          .checkout-container {
+            grid-template-columns: 1fr;
+            gap: 40px;
+          }
+
+          .success-container {
+            padding: 40px 24px;
+          }
+        }
       `}</style>
 
       {currentPage === 'main' && <MainPage />}
       {currentPage === 'login' && <LoginPage />}
+      {currentPage === 'checkout' && <CheckoutPage />}
+      {currentPage === 'payment-success' && <PaymentSuccessPage />}
       
-      {currentPage !== 'main' && currentPage !== 'login' && (
+      {currentPage !== 'main' && currentPage !== 'login' && currentPage !== 'checkout' && currentPage !== 'payment-success' && (
         <>
           <Navigation />
           

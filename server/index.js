@@ -13,6 +13,7 @@ import uploadRouter from './routes/upload.js';
 import aiRouter from './routes/ai.js';
 import webhooksRouter from './routes/webhooks.js';
 import polarRouter from './routes/polar.js';
+import stripeRouter from './routes/stripe.js';
 
 dotenv.config();
 
@@ -32,6 +33,11 @@ if (process.env.MONGODB_URI) {
 
 // 미들웨어
 app.use(cors());
+
+// Stripe webhook은 raw body가 필요하므로 먼저 처리
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
+
+// 나머지 라우트는 JSON 파싱
 app.use(express.json());
 
 // 정적 파일 제공 (업로드된 이미지)
@@ -56,6 +62,7 @@ app.use('/api/meals', mealsRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/webhooks', webhooksRouter);
 app.use('/api/polar', polarRouter);
+app.use('/api/stripe', stripeRouter);
 
 // 404 핸들러
 app.use((req, res) => {

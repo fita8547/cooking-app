@@ -45,6 +45,15 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  // Stripe 구독 관련 필드
+  stripeCustomerId: {
+    type: String,
+    default: null
+  },
+  stripeSubscriptionId: {
+    type: String,
+    default: null
+  },
   emailVerificationToken: String,
   emailVerificationCode: String,
   emailVerificationExpires: Date,
