@@ -2487,8 +2487,8 @@ export default function AdCookingClass() {
                 <label>나이</label>
                 <input
                   type="number"
-                  value={profileForm.age}
-                  onChange={(e) => setProfileForm({...profileForm, age: e.target.value})}
+                  defaultValue={profileForm.age}
+                  onBlur={(e) => setProfileForm({...profileForm, age: e.target.value})}
                   placeholder="나이"
                 />
               </div>
@@ -2508,8 +2508,8 @@ export default function AdCookingClass() {
                 <label>키 (cm)</label>
                 <input
                   type="number"
-                  value={profileForm.height}
-                  onChange={(e) => setProfileForm({...profileForm, height: e.target.value})}
+                  defaultValue={profileForm.height}
+                  onBlur={(e) => setProfileForm({...profileForm, height: e.target.value})}
                   placeholder="키"
                 />
               </div>
@@ -2517,8 +2517,8 @@ export default function AdCookingClass() {
                 <label>몸무게 (kg)</label>
                 <input
                   type="number"
-                  value={profileForm.weight}
-                  onChange={(e) => setProfileForm({...profileForm, weight: e.target.value})}
+                  defaultValue={profileForm.weight}
+                  onBlur={(e) => setProfileForm({...profileForm, weight: e.target.value})}
                   placeholder="몸무게"
                 />
               </div>
