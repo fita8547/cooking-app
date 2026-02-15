@@ -238,7 +238,7 @@ function buildRecipePrompt(ingredients, userProfile, mode) {
   }
 
   prompt += `
-다음 JSON 형식으로 3개의 레시피를 반환해주세요:
+다음 JSON 형식으로 3개의 레시피를 반환해주세요 (쿡북 스타일로 상세하게):
 {
   "recipes": [
     {
@@ -249,7 +249,13 @@ function buildRecipePrompt(ingredients, userProfile, mode) {
         {"name": "재료명", "amount": "양", "unit": "단위", "isAvailable": true/false}
       ],
       "steps": [
-        {"stepNumber": 1, "instruction": "조리 단계 설명", "duration": 예상시간(분)}
+        {
+          "stepNumber": 1, 
+          "instruction": "조리 단계 설명 (상세하고 친절하게)", 
+          "duration": 예상시간(분),
+          "tip": "이 단계의 팁이나 주의사항 (선택사항)",
+          "imageDescription": "이 단계를 시각적으로 설명 (예: 김치가 노릇노릇하게 볶아진 모습)"
+        }
       ],
       "nutrition": {
         "calories": 숫자,
@@ -260,12 +266,15 @@ function buildRecipePrompt(ingredients, userProfile, mode) {
       "difficulty": "쉬움|보통|어려움",
       "cookingTime": 총조리시간(분),
       "servings": 인분수,
-      "image": "🍲" (적절한 이모지)
+      "image": "🍲" (적절한 이모지),
+      "tags": ["간편식", "건강식", "다이어트" 등 태그 배열],
+      "chefTip": "전체 레시피에 대한 셰프의 팁"
     }
   ]
 }
 
-레시피는 실용적이고 맛있으며, 사용자의 건강 목표에 맞춰주세요.`;
+레시피는 실용적이고 맛있으며, 사용자의 건강 목표에 맞춰주세요.
+각 단계는 초보자도 따라할 수 있도록 상세하고 친절하게 작성해주세요.`;
 
   return prompt;
 }
@@ -284,11 +293,41 @@ function getMockRecipes(ingredients) {
         { name: '대파', amount: '1', unit: '대', isAvailable: ingredients.includes('대파') }
       ],
       steps: [
-        { stepNumber: 1, instruction: '김치를 송송 썰어주세요', duration: 5 },
-        { stepNumber: 2, instruction: '돼지고기를 한입 크기로 잘라주세요', duration: 5 },
-        { stepNumber: 3, instruction: '냄비에 김치와 돼지고기를 넣고 볶아주세요', duration: 5 },
-        { stepNumber: 4, instruction: '물을 붓고 끓여주세요', duration: 10 },
-        { stepNumber: 5, instruction: '두부와 대파를 넣고 10분간 더 끓입니다', duration: 10 }
+        { 
+          stepNumber: 1, 
+          instruction: '김치를 송송 썰어주세요', 
+          duration: 5,
+          tip: '김치는 너무 잘게 썰지 말고 한입 크기로 썰어주세요',
+          imageDescription: '도마 위에 김치가 적당한 크기로 썰려있는 모습'
+        },
+        { 
+          stepNumber: 2, 
+          instruction: '돼지고기를 한입 크기로 잘라주세요', 
+          duration: 5,
+          tip: '고기는 냉동실에 10분 정도 두면 자르기 쉬워요',
+          imageDescription: '돼지고기가 깔끔하게 한입 크기로 잘려있는 모습'
+        },
+        { 
+          stepNumber: 3, 
+          instruction: '냄비에 김치와 돼지고기를 넣고 중불에서 볶아주세요', 
+          duration: 5,
+          tip: '김치가 노릇노릇해질 때까지 볶으면 더 맛있어요',
+          imageDescription: '냄비에서 김치와 고기가 지글지글 볶아지는 모습'
+        },
+        { 
+          stepNumber: 4, 
+          instruction: '물 2컵을 붓고 센불에서 끓여주세요', 
+          duration: 10,
+          tip: '물 대신 육수를 사용하면 더 깊은 맛이 나요',
+          imageDescription: '냄비에 물이 부글부글 끓고 있는 모습'
+        },
+        { 
+          stepNumber: 5, 
+          instruction: '두부와 대파를 넣고 중불에서 10분간 더 끓입니다', 
+          duration: 10,
+          tip: '두부는 마지막에 넣어야 부서지지 않아요',
+          imageDescription: '완성된 김치찌개가 보글보글 끓고 있는 모습'
+        }
       ],
       nutrition: {
         calories: 450,
@@ -299,7 +338,9 @@ function getMockRecipes(ingredients) {
       difficulty: '쉬움',
       cookingTime: 35,
       servings: 2,
-      image: '🍲'
+      image: '🍲',
+      tags: ['한식', '찌개', '간편식', '집밥'],
+      chefTip: '김치는 잘 익은 것을 사용하면 더 맛있고, 마지막에 참기름 한 방울을 넣으면 풍미가 살아나요!'
     },
     {
       name: '계란볶음밥',
@@ -312,11 +353,41 @@ function getMockRecipes(ingredients) {
         { name: '당근', amount: '1/4', unit: '개', isAvailable: ingredients.includes('당근') }
       ],
       steps: [
-        { stepNumber: 1, instruction: '양파와 당근을 잘게 다져주세요', duration: 5 },
-        { stepNumber: 2, instruction: '계란을 풀어주세요', duration: 2 },
-        { stepNumber: 3, instruction: '팬에 기름을 두르고 야채를 볶아주세요', duration: 3 },
-        { stepNumber: 4, instruction: '밥을 넣고 함께 볶아주세요', duration: 5 },
-        { stepNumber: 5, instruction: '계란을 넣고 섞어가며 볶아주세요', duration: 3 }
+        { 
+          stepNumber: 1, 
+          instruction: '양파와 당근을 잘게 다져주세요', 
+          duration: 5,
+          tip: '야채는 최대한 잘게 다져야 밥과 잘 섞여요',
+          imageDescription: '도마 위에 양파와 당근이 잘게 다져진 모습'
+        },
+        { 
+          stepNumber: 2, 
+          instruction: '계란을 그릇에 풀어주세요', 
+          duration: 2,
+          tip: '소금 한 꼬집을 넣으면 더 부드러워요',
+          imageDescription: '그릇에 계란이 노란색으로 잘 풀어진 모습'
+        },
+        { 
+          stepNumber: 3, 
+          instruction: '팬에 기름을 두르고 야채를 중불에서 볶아주세요', 
+          duration: 3,
+          tip: '야채가 투명해질 때까지 볶아주세요',
+          imageDescription: '팬에서 야채가 지글지글 볶아지는 모습'
+        },
+        { 
+          stepNumber: 4, 
+          instruction: '밥을 넣고 주걱으로 으깨가며 함께 볶아주세요', 
+          duration: 5,
+          tip: '밥은 차가운 것보다 따뜻한 것이 볶기 좋아요',
+          imageDescription: '팬에서 밥과 야채가 잘 섞여 볶아지는 모습'
+        },
+        { 
+          stepNumber: 5, 
+          instruction: '계란을 넣고 빠르게 섞어가며 볶아주세요', 
+          duration: 3,
+          tip: '계란이 익으면서 밥을 코팅하도록 빠르게 저어주세요',
+          imageDescription: '완성된 계란볶음밥이 노릇노릇하게 볶아진 모습'
+        }
       ],
       nutrition: {
         calories: 520,
@@ -327,7 +398,70 @@ function getMockRecipes(ingredients) {
       difficulty: '쉬움',
       cookingTime: 18,
       servings: 2,
-      image: '🍳'
+      image: '🍳',
+      tags: ['한식', '볶음밥', '간편식', '5분요리'],
+      chefTip: '간장 1스푼과 참기름 반 스푼을 넣으면 중국집 볶음밥 맛이 나요!'
+    },
+    {
+      name: '된장찌개',
+      description: '구수한 한국 전통 찌개',
+      cuisine: '한식',
+      ingredients: [
+        { name: '된장', amount: '2', unit: '큰술', isAvailable: ingredients.includes('된장') },
+        { name: '두부', amount: '1/2', unit: '모', isAvailable: ingredients.includes('두부') },
+        { name: '감자', amount: '1', unit: '개', isAvailable: ingredients.includes('감자') },
+        { name: '양파', amount: '1/2', unit: '개', isAvailable: ingredients.includes('양파') },
+        { name: '애호박', amount: '1/2', unit: '개', isAvailable: ingredients.includes('애호박') }
+      ],
+      steps: [
+        { 
+          stepNumber: 1, 
+          instruction: '감자와 양파를 큼직하게 썰어주세요', 
+          duration: 5,
+          tip: '감자는 너무 작게 썰면 쉽게 부서져요',
+          imageDescription: '도마 위에 감자와 양파가 큼직하게 썰려있는 모습'
+        },
+        { 
+          stepNumber: 2, 
+          instruction: '냄비에 물 3컵을 붓고 된장을 풀어주세요', 
+          duration: 3,
+          tip: '된장은 체에 거르면 더 부드러워요',
+          imageDescription: '냄비에 된장이 물에 풀어지는 모습'
+        },
+        { 
+          stepNumber: 3, 
+          instruction: '감자와 양파를 넣고 센불에서 끓여주세요', 
+          duration: 10,
+          tip: '감자가 익을 때까지 충분히 끓여주세요',
+          imageDescription: '냄비에서 감자와 양파가 끓고 있는 모습'
+        },
+        { 
+          stepNumber: 4, 
+          instruction: '애호박과 두부를 넣어주세요', 
+          duration: 5,
+          tip: '애호박은 너무 오래 끓이면 물러지니 주의하세요',
+          imageDescription: '냄비에 애호박과 두부가 추가된 모습'
+        },
+        { 
+          stepNumber: 5, 
+          instruction: '대파를 송송 썰어 마지막에 넣어주세요', 
+          duration: 2,
+          tip: '대파는 마지막에 넣어야 향이 살아나요',
+          imageDescription: '완성된 된장찌개가 보글보글 끓고 있는 모습'
+        }
+      ],
+      nutrition: {
+        calories: 280,
+        protein: 15,
+        carbs: 30,
+        fat: 8
+      },
+      difficulty: '쉬움',
+      cookingTime: 25,
+      servings: 2,
+      image: '🍜',
+      tags: ['한식', '찌개', '건강식', '집밥'],
+      chefTip: '멸치 육수를 사용하면 훨씬 더 깊은 맛이 나요. 다시마와 멸치를 10분간 끓여 육수를 만들어보세요!'
     }
   ];
 }
