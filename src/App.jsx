@@ -3358,14 +3358,22 @@ export default function AdCookingClass() {
           /* 랜딩 페이지 모바일 */
           .landing-hero {
             flex-direction: column;
-            padding: 40px 20px;
-            gap: 40px;
-            min-height: auto;
+            justify-content: space-between;
+            padding: 20px 16px 16px;
+            gap: 16px;
+            min-height: 100vh;
+            max-height: 100vh;
+            overflow: hidden;
             text-align: center;
           }
 
           .landing-content {
             max-width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            flex: 1;
+            justify-content: center;
           }
 
           .title-desktop,
@@ -3381,52 +3389,65 @@ export default function AdCookingClass() {
           }
 
           .landing-title {
-            font-size: 32px;
-            margin-bottom: 12px;
-            line-height: 1.3;
+            font-size: 28px;
+            margin-bottom: 8px;
+            line-height: 1.2;
           }
 
           .landing-subtitle {
             font-size: 14px;
-            margin-bottom: 24px;
+            margin-bottom: 12px;
           }
 
           .landing-buttons {
             flex-direction: row;
             gap: 8px;
-            margin-bottom: 24px;
+            margin-bottom: 12px;
           }
 
           .btn-large,
           .btn-pro-login,
           .btn-pro-subscribe {
             flex: 1;
-            padding: 14px 16px;
-            font-size: 14px;
+            padding: 12px 12px;
+            font-size: 13px;
             white-space: nowrap;
           }
 
           .pro-badge-icon {
-            font-size: 16px;
+            font-size: 14px;
+          }
+
+          .landing-features-preview {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 12px;
+          }
+
+          .feature-preview-item {
+            padding: 6px 10px;
+            font-size: 11px;
           }
 
           .landing-image {
             max-width: 100%;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 0;
           }
 
           .landing-image img,
           .hero-emoji-large {
-            max-width: 200px;
-            font-size: 120px;
-          }
-
-          .landing-features-preview {
-            gap: 8px;
-          }
-
-          .feature-preview-item {
-            padding: 8px 12px;
-            font-size: 12px;
+            max-width: 180px;
+            width: 180px;
+            height: 180px;
+            font-size: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
 
           .features-grid {
@@ -3446,6 +3467,16 @@ export default function AdCookingClass() {
           .feature-card p {
             font-size: 14px;
           }
+
+          .landing-pro-features {
+            padding: 40px 20px;
+          }
+
+          .landing-pro-features h2 {
+            font-size: 24px;
+            margin-bottom: 24px;
+          }
+        }
         }
 
         /* Main Landing Page */
