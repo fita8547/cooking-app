@@ -133,12 +133,49 @@ export default function AdCookingClass() {
     }
   }, [isLoggedIn]);
 
-  // URL 파라미터로 결제 성공 확인
+  // URL 파라미터로 결제 성공 확인 및 자동 로그인
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('payment') === 'success') {
-      setCurrentPage('payment-success');
+    const paymentStatus = urlParams.get('payment');
+    const paymentEmail = urlParams.get('email');
+    
+    if (paymentStatus === 'success' && paymentEmail) {
+      // 결제 완료된 이메일로 자동 로그인 시도
+      const autoLoginWithEmail = async () => {
+        try {
+          console.log('🔐 결제 완료 - 이메일로 자동 로그인 시도:', paymentEmail);
+          
+          // 이메일로 Pro 사용자 확인 및 로그인
+          const response = await fetch(`${API_BASE_URL}/auth/login-with-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: paymentEmail })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setAuthToken(data.token);
+            setUser(data.user);
+            setIsLoggedIn(true);
+            setIsPremiumUser(true);
+            localStorage.setItem('authToken', data.token);
+            setCurrentPage('home');
+            console.log('✅ 자동 로그인 성공');
+          } else {
+            // 로그인 실패 시 성공 페이지로 이동
+            setCurrentPage('payment-success');
+          }
+        } catch (error) {
+          console.error('자동 로그인 실패:', error);
+          setCurrentPage('payment-success');
+        }
+      };
+      
+      autoLoginWithEmail();
       // URL에서 파라미터 제거
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (paymentStatus === 'success') {
+      setCurrentPage('payment-success');
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
@@ -1154,14 +1191,15 @@ export default function AdCookingClass() {
       setIsProcessing(true);
 
       try {
-        console.log('🔄 Stripe Checkout 생성 요청...');
-        const response = await fetch(`${API_BASE_URL}/stripe/create-checkout-session`, {
+        console.log('🔄 Polar Checkout 생성 요청...');
+        const response = await fetch(`${API_BASE_URL}/polar/create-checkout`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            email: email
+            email: email,
+            successUrl: `${window.location.origin}/?payment=success&email=${encodeURIComponent(email)}`
           })
         });
 
@@ -1176,20 +1214,16 @@ export default function AdCookingClass() {
         const data = await response.json();
         console.log('✅ Checkout 데이터:', data);
         
-        if (data.url) {
-          console.log('🔗 리다이렉트 URL:', data.url);
-          // Stripe 결제 페이지로 리다이렉트
-          window.location.href = data.url;
-        } else if (data.demo) {
-          // 데모 모드
-          console.log('⚠️  데모 모드');
-          window.location.href = data.url;
+        if (data.checkoutUrl) {
+          console.log('🔗 Polar 결제 페이지로 이동:', data.checkoutUrl);
+          // Polar 결제 페이지로 리다이렉트
+          window.location.href = data.checkoutUrl;
         } else {
           throw new Error('결제 URL을 받지 못했습니다');
         }
       } catch (error) {
         console.error('💥 결제 오류:', error);
-        alert(`결제 페이지로 이동하는 중 오류가 발생했습니다.\n\n오류: ${error.message}\n\n다시 시도해주세요.`);
+        alert(`결제 페이지로 이동하는 중 오류가 발생했습니다.\n\n오류: ${error.message}\n\nPolar 설정을 확인해주세요.`);
         setIsProcessing(false);
       }
     };
@@ -2507,6 +2541,7 @@ export default function AdCookingClass() {
               <div className="form-group">
                 <label>나이</label>
                 <input
+                  key="age-input"
                   type="number"
                   defaultValue={profileForm.age}
                   onBlur={(e) => setProfileForm({...profileForm, age: e.target.value})}
@@ -2528,6 +2563,7 @@ export default function AdCookingClass() {
               <div className="form-group">
                 <label>키 (cm)</label>
                 <input
+                  key="height-input"
                   type="number"
                   defaultValue={profileForm.height}
                   onBlur={(e) => setProfileForm({...profileForm, height: e.target.value})}
@@ -2537,6 +2573,7 @@ export default function AdCookingClass() {
               <div className="form-group">
                 <label>몸무게 (kg)</label>
                 <input
+                  key="weight-input"
                   type="number"
                   defaultValue={profileForm.weight}
                   onBlur={(e) => setProfileForm({...profileForm, weight: e.target.value})}

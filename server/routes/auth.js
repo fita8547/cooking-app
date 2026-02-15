@@ -267,6 +267,47 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// 이메일로 로그인 (결제 완료 후 자동 로그인용)
+router.post('/login-with-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // 이메일로 사용자 찾기
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ error: '사용자를 찾을 수 없습니다' });
+    }
+
+    // Pro 구독 확인
+    if (!user.isPro && !user.isPremium) {
+      return res.status(403).json({ error: 'Pro 구독이 필요합니다' });
+    }
+
+    // JWT 토큰 생성
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        isPremium: user.isPremium || user.isPro || false,
+        isPro: user.isPro || false,
+        isAdmin: user.isAdmin || false
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // 현재 사용자 정보 조회
 router.get('/me', authenticate, async (req, res) => {
   try {

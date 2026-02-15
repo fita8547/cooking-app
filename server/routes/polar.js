@@ -1,5 +1,6 @@
 import express from 'express';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 
 const router = express.Router();
@@ -134,24 +135,40 @@ async function handleSubscriptionCreated(subscription) {
       email: customer_email
     });
 
-    // 이메일로 사용자 찾기
-    const user = await User.findOne({ email: customer_email });
+    // 이메일로 사용자 찾기 또는 생성
+    let user = await User.findOne({ email: customer_email });
 
     if (!user) {
-      console.error('❌ 사용자를 찾을 수 없습니다:', customer_email);
-      return;
+      console.log('📝 새 Pro 사용자 생성:', customer_email);
+      
+      // 임시 비밀번호 생성 (사용자는 이메일로만 로그인)
+      const tempPassword = crypto.randomBytes(32).toString('hex');
+      const hashedPassword = await bcrypt.hash(tempPassword, 10);
+      
+      user = new User({
+        email: customer_email,
+        name: customer_email.split('@')[0], // 이메일 앞부분을 이름으로
+        password: hashedPassword,
+        isEmailVerified: true, // 결제 완료했으므로 인증된 것으로 간주
+        isPro: true,
+        isPremium: true,
+        polarCustomerId: customer_id,
+        polarSubscriptionId: subscription_id,
+        proExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+      });
+      
+      await user.save();
+      console.log('✅ 새 Pro 사용자 생성 완료:', user.email);
+    } else {
+      // 기존 사용자 Pro 권한 활성화
+      user.isPro = true;
+      user.isPremium = true;
+      user.polarCustomerId = customer_id;
+      user.polarSubscriptionId = subscription_id;
+      user.proExpiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+      await user.save();
+      console.log('✅ 기존 사용자 Pro 권한 활성화 완료:', user.email);
     }
-
-    // Pro 권한 활성화
-    user.isPro = true;
-    user.isPremium = true; // 기존 시스템과 호환
-    user.polarCustomerId = customer_id;
-    user.polarSubscriptionId = subscription_id;
-    user.proExpiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1년 후
-
-    await user.save();
-
-    console.log('✅ Pro 권한 활성화 완료:', user.email);
   } catch (error) {
     console.error('❌ 구독 생성 처리 오류:', error);
     throw error;
