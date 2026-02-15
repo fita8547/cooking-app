@@ -3352,6 +3352,67 @@ export default function AdCookingClass() {
           .page-header p {
             font-size: 14px;
           }
+
+          /* 랜딩 페이지 모바일 */
+          .landing-hero {
+            flex-direction: column;
+            padding: 40px 20px;
+            gap: 40px;
+            min-height: auto;
+            text-align: center;
+          }
+
+          .landing-content {
+            max-width: 100%;
+          }
+
+          .landing-title {
+            font-size: 36px;
+            margin-bottom: 16px;
+          }
+
+          .landing-subtitle {
+            font-size: 16px;
+            margin-bottom: 32px;
+          }
+
+          .landing-buttons {
+            gap: 12px;
+            margin-bottom: 32px;
+          }
+
+          .btn-large,
+          .btn-pro-login,
+          .btn-pro-subscribe {
+            padding: 16px 32px;
+            font-size: 16px;
+          }
+
+          .landing-image {
+            max-width: 100%;
+          }
+
+          .landing-image img {
+            max-width: 280px;
+          }
+
+          .features-grid {
+            grid-template-columns: 1fr;
+            gap: 20px;
+            padding: 40px 20px;
+          }
+
+          .feature-card {
+            padding: 24px;
+          }
+
+          .feature-card h3 {
+            font-size: 20px;
+          }
+
+          .feature-card p {
+            font-size: 14px;
+          }
         }
 
         /* Main Landing Page */
