@@ -1076,7 +1076,7 @@ export default function AdCookingClass() {
     const [proEmail, setProEmail] = useState('');
     const [isCheckingProEmail, setIsCheckingProEmail] = useState(false);
 
-    // Pro 이메일로 로그인
+    // Pro 이메일로 로그인 시도
     const handleProEmailLogin = async (e) => {
       e.preventDefault();
       
@@ -1096,6 +1096,7 @@ export default function AdCookingClass() {
         });
 
         if (response.ok) {
+          // Pro 구독이 있으면 로그인
           const data = await response.json();
           setAuthToken(data.token);
           setUser(data.user);
@@ -1104,8 +1105,15 @@ export default function AdCookingClass() {
           localStorage.setItem('authToken', data.token);
           setCurrentPage('home');
         } else {
+          // Pro 구독이 없으면 결제 페이지로 이동
           const error = await response.json();
-          setAuthError(error.error || 'Pro 구독이 확인되지 않았습니다. 결제를 완료해주세요.');
+          if (error.error === 'Pro 구독이 필요합니다' || error.error === '사용자를 찾을 수 없습니다') {
+            // 이메일을 저장하고 결제 페이지로 이동
+            setAuthForm({...authForm, email: proEmail});
+            setCurrentPage('checkout');
+          } else {
+            setAuthError(error.error || '로그인에 실패했습니다.');
+          }
         }
       } catch (error) {
         setAuthError('서버 연결에 실패했습니다.');
@@ -1119,8 +1127,8 @@ export default function AdCookingClass() {
         <div className="login-card">
           <div className="login-header">
             <ChefHat size={48} />
-            <h1>Pro 계정 로그인</h1>
-            <p>결제 시 사용한 이메일로 로그인하세요</p>
+            <h1>Pro 계정</h1>
+            <p>이메일 주소를 입력하세요</p>
           </div>
 
           {authError && (
@@ -1145,8 +1153,12 @@ export default function AdCookingClass() {
               className="btn-primary"
               disabled={isCheckingProEmail}
             >
-              {isCheckingProEmail ? '확인 중...' : 'Pro 로그인'}
+              {isCheckingProEmail ? '확인 중...' : '계속하기'}
             </button>
+
+            <p style={{fontSize: '14px', color: '#666', marginTop: '16px', textAlign: 'center'}}>
+              구독이 없으면 결제 페이지로 이동합니다
+            </p>
           </form>
 
           <div style={{marginTop: '20px', textAlign: 'center'}}>
@@ -1220,7 +1232,8 @@ export default function AdCookingClass() {
   // 결제 페이지
   const CheckoutPage = () => {
     const [isProcessing, setIsProcessing] = useState(false);
-    const [email, setEmail] = useState('');
+    // 로그인 페이지에서 넘어온 이메일이 있으면 사용
+    const [email, setEmail] = useState(authForm.email || '');
 
     const handleSubscribe = async () => {
       if (!email || !email.includes('@')) {
