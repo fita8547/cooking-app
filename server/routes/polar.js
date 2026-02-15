@@ -13,34 +13,26 @@ router.post('/create-checkout', async (req, res) => {
   try {
     const { email, successUrl } = req.body;
     const checkoutLink = process.env.POLAR_CHECKOUT_LINK;
-    const productId = process.env.POLAR_PRODUCT_ID;
 
     console.log('🔄 Polar Checkout 요청:', { email, checkoutLink: !!checkoutLink });
 
-    // Checkout Link가 설정되어 있으면 사용
-    if (checkoutLink && checkoutLink !== 'your_polar_checkout_link_here') {
-      console.log('✅ Polar Checkout Link 사용:', checkoutLink);
-      
-      // Success URL을 쿼리 파라미터로 추가
-      const finalUrl = `${checkoutLink}?success_url=${encodeURIComponent(successUrl || `${process.env.FRONTEND_URL}/?payment=success`)}`;
-      
-      return res.json({ 
-        checkoutUrl: finalUrl,
-        productId 
+    // Checkout Link가 설정되어 있지 않으면 에러
+    if (!checkoutLink || checkoutLink === 'your_polar_checkout_link_here') {
+      console.error('❌ POLAR_CHECKOUT_LINK가 설정되지 않았습니다');
+      return res.status(500).json({ 
+        error: 'Polar 결제가 설정되지 않았습니다. 관리자에게 문의해주세요.',
+        instructions: 'Polar Dashboard에서 Product를 생성하고 POLAR_CHECKOUT_LINK 환경 변수를 설정해야 합니다.'
       });
     }
 
-    // 데모 모드: Checkout Link가 없으면 결제 성공 페이지로 바로 이동
-    console.log('⚠️  POLAR_CHECKOUT_LINK가 설정되지 않음 - 데모 모드로 작동');
-    console.log('💡 실제 결제를 사용하려면 .env 파일에 POLAR_CHECKOUT_LINK를 설정하세요');
+    console.log('✅ Polar Checkout Link 사용:', checkoutLink);
     
-    // 데모 모드: 바로 성공 페이지로 리다이렉트
-    const demoSuccessUrl = successUrl || `${process.env.FRONTEND_URL}/?payment=success`;
+    // Success URL을 쿼리 파라미터로 추가
+    const finalUrl = `${checkoutLink}?success_url=${encodeURIComponent(successUrl || `${process.env.FRONTEND_URL}/?payment=success&email=${encodeURIComponent(email)}`)}`;
     
     return res.json({ 
-      checkoutUrl: demoSuccessUrl,
-      demo: true,
-      message: '데모 모드: 실제 결제 없이 성공 페이지로 이동합니다'
+      checkoutUrl: finalUrl,
+      url: finalUrl // 호환성을 위해 둘 다 반환
     });
   } catch (error) {
     console.error('❌ Checkout 생성 오류:', error);
