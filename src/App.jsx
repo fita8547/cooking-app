@@ -1073,13 +1073,54 @@ export default function AdCookingClass() {
 
   // 로그인/회원가입 페이지
   const LoginPage = () => {
+    const [proEmail, setProEmail] = useState('');
+    const [isCheckingProEmail, setIsCheckingProEmail] = useState(false);
+
+    // Pro 이메일로 로그인
+    const handleProEmailLogin = async (e) => {
+      e.preventDefault();
+      
+      if (!proEmail || !proEmail.includes('@')) {
+        setAuthError('올바른 이메일 주소를 입력해주세요.');
+        return;
+      }
+
+      setIsCheckingProEmail(true);
+      setAuthError('');
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/login-with-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: proEmail })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setAuthToken(data.token);
+          setUser(data.user);
+          setIsLoggedIn(true);
+          setIsPremiumUser(true);
+          localStorage.setItem('authToken', data.token);
+          setCurrentPage('home');
+        } else {
+          const error = await response.json();
+          setAuthError(error.error || 'Pro 구독이 확인되지 않았습니다. 결제를 완료해주세요.');
+        }
+      } catch (error) {
+        setAuthError('서버 연결에 실패했습니다.');
+      } finally {
+        setIsCheckingProEmail(false);
+      }
+    };
+
     return (
       <div className="login-container">
         <div className="login-card">
           <div className="login-header">
             <ChefHat size={48} />
-            <h1>애드쿠킹클래스</h1>
-            <p>AI가 당신의 요리를 돕습니다</p>
+            <h1>Pro 계정 로그인</h1>
+            <p>결제 시 사용한 이메일로 로그인하세요</p>
           </div>
 
           {authError && (
@@ -1089,34 +1130,33 @@ export default function AdCookingClass() {
             </div>
           )}
           
-          <form className="login-form" onSubmit={(e) => e.preventDefault()}>
+          <form className="login-form" onSubmit={handleProEmailLogin}>
             <input 
-              type="text"
-              placeholder="아이디"
+              type="email"
+              placeholder="이메일 주소"
               className="input-field"
-              value={authForm.username}
-              onChange={(e) => setAuthForm({...authForm, username: e.target.value})}
-              required
-            />
-            
-            <input 
-              type="password" 
-              placeholder="비밀번호" 
-              className="input-field"
-              value={authForm.password}
-              onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
+              value={proEmail}
+              onChange={(e) => setProEmail(e.target.value)}
               required
             />
 
             <button 
-              type="button"
+              type="submit"
               className="btn-primary"
-              disabled={authLoading}
-              onClick={handleLogin}
+              disabled={isCheckingProEmail}
             >
-              {authLoading && authMode === 'login' ? '처리 중...' : '로그인하기'}
+              {isCheckingProEmail ? '확인 중...' : 'Pro 로그인'}
             </button>
           </form>
+
+          <div style={{marginTop: '20px', textAlign: 'center'}}>
+            <button 
+              onClick={() => setCurrentPage('main')}
+              className="btn-text"
+            >
+              ← 메인으로 돌아가기
+            </button>
+          </div>
         </div>
 
         {/* 이메일 인증 모달 */}
