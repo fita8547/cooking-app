@@ -1214,10 +1214,12 @@ export default function AdCookingClass() {
         const data = await response.json();
         console.log('✅ Checkout 데이터:', data);
         
-        if (data.checkoutUrl) {
-          console.log('🔗 Polar 결제 페이지로 이동:', data.checkoutUrl);
+        const checkoutUrl = data.checkoutUrl || data.url;
+        
+        if (checkoutUrl) {
+          console.log('🔗 Polar 결제 페이지로 이동:', checkoutUrl);
           // Polar 결제 페이지로 리다이렉트
-          window.location.href = data.checkoutUrl;
+          window.location.href = checkoutUrl;
         } else {
           throw new Error('결제 URL을 받지 못했습니다');
         }
