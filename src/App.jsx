@@ -95,6 +95,7 @@ export default function AdCookingClass() {
   const [isLoadingRecipes, setIsLoadingRecipes] = useState(false);
   const [isRecognizingImage, setIsRecognizingImage] = useState(false);
   const [error, setError] = useState(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const API_BASE_URL = '/api';
 
@@ -2631,22 +2632,53 @@ export default function AdCookingClass() {
     <nav className="navbar">
       <div className="nav-brand" onClick={() => setCurrentPage('main')}>
         <ChefHat size={28} />
-        <span>애드쿠킹클래스</span>
+        <span className="brand-text">애드쿠킹클래스</span>
+        <span className="brand-text-mobile">쿠킹</span>
         {isPremiumUser && <span className="premium-badge">PRO</span>}
       </div>
       
-      <div className="nav-menu">
-        <button onClick={() => setCurrentPage('home')} className={currentPage === 'home' ? 'active' : ''}>
-          식단관리
+      {/* 햄버거 메뉴 버튼 (모바일) */}
+      <button 
+        className="hamburger-btn"
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        aria-label="메뉴"
+      >
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      
+      <div className={`nav-menu ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+        <button 
+          onClick={() => {
+            setCurrentPage('home');
+            setIsMobileMenuOpen(false);
+          }} 
+          className={currentPage === 'home' ? 'active' : ''}
+        >
+          <span className="nav-text-full">식단관리</span>
+          <span className="nav-text-mobile">식단</span>
         </button>
         <button 
-          onClick={() => setCurrentPage('history')} 
+          onClick={() => {
+            setCurrentPage('history');
+            setIsMobileMenuOpen(false);
+          }} 
           className={currentPage === 'history' ? 'active' : ''}
         >
-          식사기록 {!isPremiumUser && <span className="premium-icon">🔒</span>}
+          <span className="nav-text-full">식사기록</span>
+          <span className="nav-text-mobile">기록</span>
+          {!isPremiumUser && <span className="premium-icon">🔒</span>}
         </button>
-        <button onClick={() => setCurrentPage('profile')} className={currentPage === 'profile' ? 'active' : ''}>
-          프로필
+        <button 
+          onClick={() => {
+            setCurrentPage('profile');
+            setIsMobileMenuOpen(false);
+          }} 
+          className={currentPage === 'profile' ? 'active' : ''}
+        >
+          <span className="nav-text-full">프로필</span>
+          <span className="nav-text-mobile">내정보</span>
         </button>
         <button 
           onClick={() => {
@@ -2656,12 +2688,22 @@ export default function AdCookingClass() {
             setIsPremiumUser(false);
             localStorage.removeItem('authToken');
             setCurrentPage('main');
+            setIsMobileMenuOpen(false);
           }}
           className="btn-logout"
         >
-          Pro계정으로 로그인
+          <span className="nav-text-full">Pro계정으로 로그인</span>
+          <span className="nav-text-mobile">로그인</span>
         </button>
       </div>
+      
+      {/* 모바일 메뉴 오버레이 */}
+      {isMobileMenuOpen && (
+        <div 
+          className="mobile-overlay"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
     </nav>
   );
 
@@ -3112,6 +3154,37 @@ export default function AdCookingClass() {
           color: #ff6b6b;
         }
 
+        .brand-text-mobile {
+          display: none;
+        }
+
+        .hamburger-btn {
+          display: none;
+          flex-direction: column;
+          gap: 5px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 8px;
+          z-index: 101;
+        }
+
+        .hamburger-btn span {
+          width: 25px;
+          height: 3px;
+          background: #2d3436;
+          border-radius: 3px;
+          transition: all 0.3s;
+        }
+
+        .mobile-overlay {
+          display: none;
+        }
+
+        .nav-text-mobile {
+          display: none;
+        }
+
         .premium-badge {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
@@ -3196,6 +3269,89 @@ export default function AdCookingClass() {
           color: #2d3436 !important;
           border: 2px solid #FFB8B8 !important;
           margin-left: 8px;
+        }
+
+        /* 모바일 반응형 (768px 이하) */
+        @media (max-width: 768px) {
+          .navbar {
+            padding: 12px 16px;
+          }
+
+          .nav-brand {
+            font-size: 18px;
+            gap: 8px;
+          }
+
+          .brand-text {
+            display: none;
+          }
+
+          .brand-text-mobile {
+            display: inline;
+          }
+
+          .hamburger-btn {
+            display: flex;
+          }
+
+          .nav-menu {
+            position: fixed;
+            top: 0;
+            right: -100%;
+            width: 70%;
+            max-width: 300px;
+            height: 100vh;
+            background: white;
+            flex-direction: column;
+            gap: 0;
+            padding: 80px 20px 20px;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            transition: right 0.3s ease;
+            z-index: 100;
+          }
+
+          .nav-menu.mobile-open {
+            right: 0;
+          }
+
+          .nav-menu button {
+            width: 100%;
+            text-align: left;
+            padding: 16px 20px;
+            border-radius: 12px;
+            font-size: 16px;
+          }
+
+          .nav-text-full {
+            display: none;
+          }
+
+          .nav-text-mobile {
+            display: inline;
+          }
+
+          .mobile-overlay {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: rgba(0,0,0,0.5);
+            z-index: 99;
+          }
+
+          .container {
+            padding: 16px;
+          }
+
+          .page-header h2 {
+            font-size: 24px;
+          }
+
+          .page-header p {
+            font-size: 14px;
+          }
         }
 
         /* Main Landing Page */
