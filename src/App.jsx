@@ -101,7 +101,8 @@ export default function AdCookingClass() {
   const [error, setError] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const API_BASE_URL = '/api';
+  // API Base URL - 환경 변수 또는 기본값 사용
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
   // 사용자 정보 가져오기
   const fetchUserProfile = async (token) => {
@@ -2438,12 +2439,14 @@ export default function AdCookingClass() {
 
   // 프로필 페이지
   const ProfilePage = () => {
+    // ref로 input 값 관리
+    const ageRef = useRef(null);
+    const heightRef = useRef(null);
+    const weightRef = useRef(null);
+    
     const [profileForm, setProfileForm] = useState({
       name: user?.name || '',
-      age: user?.healthProfile?.age || '',
       gender: user?.healthProfile?.gender || '',
-      height: user?.healthProfile?.height || '',
-      weight: user?.healthProfile?.weight || '',
       allergies: user?.healthProfile?.allergies || [],
       diseases: user?.healthProfile?.diseases || [],
       goal: user?.healthProfile?.goal || ''
@@ -2457,6 +2460,11 @@ export default function AdCookingClass() {
       setIsSaving(true);
       setSaveMessage('');
 
+      // ref에서 값 읽기
+      const age = ageRef.current?.value;
+      const height = heightRef.current?.value;
+      const weight = weightRef.current?.value;
+
       try {
         // 게스트 사용자는 로컬에만 저장
         if (user?.isGuest || !authToken) {
@@ -2464,10 +2472,10 @@ export default function AdCookingClass() {
             ...user,
             name: profileForm.name,
             healthProfile: {
-              age: profileForm.age ? parseInt(profileForm.age) : undefined,
+              age: age ? parseInt(age) : undefined,
               gender: profileForm.gender || undefined,
-              height: profileForm.height ? parseFloat(profileForm.height) : undefined,
-              weight: profileForm.weight ? parseFloat(profileForm.weight) : undefined,
+              height: height ? parseFloat(height) : undefined,
+              weight: weight ? parseFloat(weight) : undefined,
               allergies: profileForm.allergies,
               diseases: profileForm.diseases,
               goal: profileForm.goal || undefined
@@ -2492,10 +2500,10 @@ export default function AdCookingClass() {
           body: JSON.stringify({
             name: profileForm.name,
             healthProfile: {
-              age: profileForm.age ? parseInt(profileForm.age) : undefined,
+              age: age ? parseInt(age) : undefined,
               gender: profileForm.gender || undefined,
-              height: profileForm.height ? parseFloat(profileForm.height) : undefined,
-              weight: profileForm.weight ? parseFloat(profileForm.weight) : undefined,
+              height: height ? parseFloat(height) : undefined,
+              weight: weight ? parseFloat(weight) : undefined,
               allergies: profileForm.allergies,
               diseases: profileForm.diseases,
               goal: profileForm.goal || undefined
@@ -2596,10 +2604,9 @@ export default function AdCookingClass() {
               <div className="form-group">
                 <label>나이</label>
                 <input
-                  key="age-input"
+                  ref={ageRef}
                   type="number"
-                  defaultValue={profileForm.age}
-                  onBlur={(e) => setProfileForm({...profileForm, age: e.target.value})}
+                  defaultValue={user?.healthProfile?.age || ''}
                   placeholder="나이"
                 />
               </div>
@@ -2618,20 +2625,18 @@ export default function AdCookingClass() {
               <div className="form-group">
                 <label>키 (cm)</label>
                 <input
-                  key="height-input"
+                  ref={heightRef}
                   type="number"
-                  defaultValue={profileForm.height}
-                  onBlur={(e) => setProfileForm({...profileForm, height: e.target.value})}
+                  defaultValue={user?.healthProfile?.height || ''}
                   placeholder="키"
                 />
               </div>
               <div className="form-group">
                 <label>몸무게 (kg)</label>
                 <input
-                  key="weight-input"
+                  ref={weightRef}
                   type="number"
-                  defaultValue={profileForm.weight}
-                  onBlur={(e) => setProfileForm({...profileForm, weight: e.target.value})}
+                  defaultValue={user?.healthProfile?.weight || ''}
                   placeholder="몸무게"
                 />
               </div>
