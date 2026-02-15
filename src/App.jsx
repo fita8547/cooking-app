@@ -1860,9 +1860,25 @@ export default function AdCookingClass() {
 
         <div className="step-content">
           <div className="step-number">STEP {currentStep + 1}</div>
-          <p className="step-instruction">{selectedRecipe.steps[currentStep]}</p>
+          <p className="step-instruction">
+            {typeof selectedRecipe.steps[currentStep] === 'string' 
+              ? selectedRecipe.steps[currentStep] 
+              : selectedRecipe.steps[currentStep].instruction}
+          </p>
+          
+          {selectedRecipe.steps[currentStep].tip && (
+            <div className="step-tip">
+              💡 <strong>팁:</strong> {selectedRecipe.steps[currentStep].tip}
+            </div>
+          )}
           
           <div className="step-emoji">{selectedRecipe.image}</div>
+          
+          {selectedRecipe.steps[currentStep].duration && (
+            <div className="step-duration">
+              ⏱️ 예상 시간: {selectedRecipe.steps[currentStep].duration}분
+            </div>
+          )}
         </div>
 
         <div className="step-navigation">
@@ -4070,6 +4086,32 @@ export default function AdCookingClass() {
           color: #2d3436;
           line-height: 1.6;
           margin-bottom: 32px;
+        }
+
+        .step-tip {
+          background: #fff9e6;
+          border-left: 4px solid #ffd93d;
+          padding: 16px 20px;
+          margin: 24px 0;
+          text-align: left;
+          border-radius: 8px;
+          font-size: 15px;
+          color: #2d3436;
+          line-height: 1.6;
+        }
+
+        .step-tip strong {
+          color: #f39c12;
+        }
+
+        .step-duration {
+          display: inline-block;
+          background: #f0f0f0;
+          padding: 8px 16px;
+          border-radius: 20px;
+          font-size: 14px;
+          color: #636e72;
+          margin-top: 16px;
         }
 
         .step-emoji {
