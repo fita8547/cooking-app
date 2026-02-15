@@ -11,6 +11,10 @@ const IngredientInput = React.memo(React.forwardRef(({ onAdd }, ref) => {
       if (value) {
         onAdd(value);
         ref.current.value = '';
+        // 엔터 후 즉시 포커스 유지
+        setTimeout(() => {
+          ref.current?.focus();
+        }, 0);
       }
     }
   };
@@ -3359,11 +3363,9 @@ export default function AdCookingClass() {
           .landing-hero {
             flex-direction: column;
             justify-content: space-between;
-            padding: 20px 16px 16px;
-            gap: 16px;
-            min-height: 100vh;
-            max-height: 100vh;
-            overflow: hidden;
+            padding: 24px 16px calc(16px + env(safe-area-inset-bottom));
+            gap: 8px;
+            min-height: 100dvh;
             text-align: center;
           }
 
@@ -3371,9 +3373,9 @@ export default function AdCookingClass() {
             max-width: 100%;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
             flex: 1;
-            justify-content: center;
+            justify-content: flex-start;
           }
 
           .title-desktop,
@@ -3389,45 +3391,50 @@ export default function AdCookingClass() {
           }
 
           .landing-title {
-            font-size: 28px;
-            margin-bottom: 8px;
+            font-size: clamp(24px, 6vw, 32px);
+            margin-bottom: 4px;
             line-height: 1.2;
+            white-space: normal;
           }
 
           .landing-subtitle {
-            font-size: 14px;
-            margin-bottom: 12px;
+            font-size: clamp(12px, 3.5vw, 16px);
+            margin-bottom: 8px;
+            line-height: 1.3;
+            white-space: normal;
           }
 
           .landing-buttons {
             flex-direction: row;
-            gap: 8px;
-            margin-bottom: 12px;
+            gap: 6px;
+            margin-bottom: 8px;
           }
 
           .btn-large,
           .btn-pro-login,
           .btn-pro-subscribe {
             flex: 1;
-            padding: 12px 12px;
-            font-size: 13px;
+            padding: 10px 12px;
+            font-size: clamp(12px, 3vw, 14px);
             white-space: nowrap;
+            line-height: 1.2;
           }
 
           .pro-badge-icon {
-            font-size: 14px;
+            font-size: clamp(12px, 3vw, 14px);
           }
 
           .landing-features-preview {
             display: flex;
             flex-direction: column;
-            gap: 6px;
-            margin-bottom: 12px;
+            gap: 4px;
+            margin-bottom: 8px;
           }
 
           .feature-preview-item {
             padding: 6px 10px;
-            font-size: 11px;
+            font-size: clamp(10px, 2.5vw, 12px);
+            line-height: 1.2;
           }
 
           .landing-image {
@@ -3435,19 +3442,21 @@ export default function AdCookingClass() {
             flex-shrink: 0;
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-end;
             margin-top: 0;
+            padding-bottom: 8px;
           }
 
           .landing-image img,
           .hero-emoji-large {
-            max-width: 180px;
-            width: 180px;
-            height: 180px;
-            font-size: 100px;
+            width: min(220px, 55vw);
+            max-height: 24vh;
+            height: auto;
+            font-size: clamp(80px, 20vw, 120px);
             display: flex;
             align-items: center;
             justify-content: center;
+            object-fit: contain;
           }
 
           .features-grid {
