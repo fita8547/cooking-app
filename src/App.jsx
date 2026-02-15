@@ -981,7 +981,7 @@ export default function AdCookingClass() {
               onClick={() => setCurrentPage('health')}
             >
               <span className="btn-text-desktop">건강식단 입력하기</span>
-              <span className="btn-text-mobile">시작하기</span>
+              <span className="btn-text-mobile">건강식단 입력하기</span>
             </button>
             
             <button 
@@ -990,7 +990,7 @@ export default function AdCookingClass() {
             >
               <span className="pro-badge-icon">⭐</span>
               <span className="btn-text-desktop">Pro 구독하기 - $3/월</span>
-              <span className="btn-text-mobile">Pro 구독</span>
+              <span className="btn-text-mobile">Pro 구독하기 - $3/월</span>
             </button>
           </div>
 
@@ -3362,10 +3362,10 @@ export default function AdCookingClass() {
           /* 랜딩 페이지 모바일 */
           .landing-hero {
             flex-direction: column;
-            justify-content: space-between;
-            padding: 24px 16px calc(16px + env(safe-area-inset-bottom));
-            gap: 8px;
-            min-height: 100dvh;
+            justify-content: flex-start;
+            padding: 60px 20px 40px;
+            gap: 24px;
+            min-height: auto;
             text-align: center;
           }
 
@@ -3373,9 +3373,7 @@ export default function AdCookingClass() {
             max-width: 100%;
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            flex: 1;
-            justify-content: flex-start;
+            gap: 16px;
           }
 
           .title-desktop,
@@ -3391,72 +3389,68 @@ export default function AdCookingClass() {
           }
 
           .landing-title {
-            font-size: clamp(24px, 6vw, 32px);
-            margin-bottom: 4px;
-            line-height: 1.2;
-            white-space: normal;
-          }
-
-          .landing-subtitle {
-            font-size: clamp(12px, 3.5vw, 16px);
+            font-size: 32px;
             margin-bottom: 8px;
             line-height: 1.3;
             white-space: normal;
           }
 
+          .landing-subtitle {
+            font-size: 16px;
+            margin-bottom: 16px;
+            line-height: 1.4;
+            white-space: normal;
+          }
+
           .landing-buttons {
-            flex-direction: row;
-            gap: 6px;
-            margin-bottom: 8px;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
           }
 
           .btn-large,
           .btn-pro-login,
           .btn-pro-subscribe {
-            flex: 1;
-            padding: 10px 12px;
-            font-size: clamp(12px, 3vw, 14px);
-            white-space: nowrap;
-            line-height: 1.2;
+            width: 100%;
+            padding: 16px 24px;
+            font-size: 16px;
+            white-space: normal;
+            line-height: 1.3;
           }
 
           .pro-badge-icon {
-            font-size: clamp(12px, 3vw, 14px);
+            font-size: 18px;
           }
 
           .landing-features-preview {
             display: flex;
             flex-direction: column;
-            gap: 4px;
-            margin-bottom: 8px;
+            gap: 10px;
+            margin-bottom: 24px;
           }
 
           .feature-preview-item {
-            padding: 6px 10px;
-            font-size: clamp(10px, 2.5vw, 12px);
-            line-height: 1.2;
+            padding: 10px 16px;
+            font-size: 14px;
+            line-height: 1.3;
           }
 
           .landing-image {
             max-width: 100%;
-            flex-shrink: 0;
             display: flex;
             justify-content: center;
-            align-items: flex-end;
-            margin-top: 0;
-            padding-bottom: 8px;
+            align-items: center;
+            margin-top: 20px;
           }
 
           .landing-image img,
           .hero-emoji-large {
-            width: min(220px, 55vw);
-            max-height: 24vh;
-            height: auto;
-            font-size: clamp(80px, 20vw, 120px);
+            width: 280px;
+            height: 280px;
+            font-size: 160px;
             display: flex;
             align-items: center;
             justify-content: center;
-            object-fit: contain;
           }
 
           .features-grid {
