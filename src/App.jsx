@@ -189,8 +189,8 @@ export default function AdCookingClass() {
     setAuthMode('login');
 
     try {
-      // 관리자 계정 확인
-      if (authForm.username === 'admin' && authForm.password === 'admin1234') {
+      // 관리자 계정 확인 (이메일만으로 로그인)
+      if (authForm.username === 'admin@adcookingclass.com') {
         const adminUser = {
           name: '관리자',
           username: 'admin',
@@ -3142,23 +3142,13 @@ export default function AdCookingClass() {
             
             <form className="login-form" onSubmit={(e) => e.preventDefault()}>
               <input 
-                type="text"
-                placeholder="아이디"
+                type="email"
+                placeholder="이메일 주소"
                 className="input-field"
                 value={authForm.username}
                 onChange={(e) => setAuthForm({...authForm, username: e.target.value})}
                 required
               />
-              
-              <input 
-                type="password" 
-                placeholder="비밀번호" 
-                className="input-field"
-                value={authForm.password}
-                onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
-                required
-              />
-
 
               <button 
                 type="button"

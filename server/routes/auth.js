@@ -204,34 +204,68 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password, username } = req.body;
 
-    // 아이디 또는 이메일로 로그인 지원
+    // 이메일 또는 username 필드로 사용자 찾기
     let user;
-    if (username) {
-      // 아이디로 로그인 (username 필드가 있으면)
-      // admin 계정은 이메일로 찾기
-      if (username === 'admin') {
-        user = await User.findOne({ email: 'admin@adcookingclass.com' });
-      } else {
-        user = await User.findOne({ 
-          $or: [
-            { email: `${username}@user.local` },
-            { email: username }
-          ]
-        });
-      }
-    } else {
-      // 이메일로 로그인
-      user = await User.findOne({ email });
+    const emailToFind = username || email;
+    
+    if (!emailToFind) {
+      return res.status(401).json({ error: '이메일을 입력해주세요' });
     }
 
+    // 관리자 계정 확인 (비밀번호 없이 로그인)
+    if (emailToFind === 'admin@adcookingclass.com') {
+      user = await User.findOne({ email: 'admin@adcookingclass.com' });
+      
+      if (!user) {
+        // 관리자 계정이 없으면 생성
+        const hashedPassword = await bcrypt.hash('admin1234', 10);
+        user = new User({
+          email: 'admin@adcookingclass.com',
+          password: hashedPassword,
+          name: '관리자',
+          isEmailVerified: true,
+          isPremium: true,
+          isAdmin: true
+        });
+        await user.save();
+      }
+
+      // JWT 토큰 생성 (비밀번호 확인 없이)
+      const token = jwt.sign(
+        { userId: user._id },
+        process.env.JWT_SECRET || 'your-secret-key',
+        { expiresIn: '7d' }
+      );
+
+      return res.json({
+        success: true,
+        token,
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          isPremium: true,
+          isAdmin: true
+        }
+      });
+    }
+
+    // 일반 사용자 로그인 (비밀번호 필요)
+    user = await User.findOne({ email: emailToFind });
+
     if (!user) {
-      return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다' });
+      return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다' });
+    }
+
+    // 비밀번호가 제공되지 않은 경우
+    if (!password) {
+      return res.status(401).json({ error: '비밀번호를 입력해주세요' });
     }
 
     // 비밀번호 확인
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다' });
+      return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다' });
     }
 
     // 이메일 인증 확인 (관리자는 제외)
