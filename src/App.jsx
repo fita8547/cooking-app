@@ -967,12 +967,12 @@ export default function AdCookingClass() {
       <div className="landing-hero">
         <div className="landing-content">
           <h1 className="landing-title">
-            <span className="title-desktop">냉장고 재료로<br /><span className="gradient-text">맛있는 요리</span>를<br />만들어보세요</span>
-            <span className="title-mobile">냉장고 재료로<br /><span className="gradient-text">맛있는 요리</span></span>
+            <span className="gradient-text">냉장고</span> 재료로<br />
+            <span className="gradient-text">맛있는 요리</span>를<br />
+            만들어보세요
           </h1>
           <p className="landing-subtitle">
-            <span className="subtitle-desktop">AI가 당신의 재료를 분석하고 최적의 레시피를 추천합니다</span>
-            <span className="subtitle-mobile">AI 레시피 추천</span>
+            AI가 당신의 재료를 분석하고 최적의 레시피를 추천합니다
           </p>
           
           <div className="landing-buttons">
@@ -980,8 +980,7 @@ export default function AdCookingClass() {
               className="btn-primary btn-large"
               onClick={() => setCurrentPage('health')}
             >
-              <span className="btn-text-desktop">건강식단 입력하기</span>
-              <span className="btn-text-mobile">건강식단 입력하기</span>
+              무료플랜 시작
             </button>
             
             <button 
@@ -989,8 +988,7 @@ export default function AdCookingClass() {
               onClick={() => setCurrentPage('checkout')}
             >
               <span className="pro-badge-icon">⭐</span>
-              <span className="btn-text-desktop">Pro 구독하기 - $3/월</span>
-              <span className="btn-text-mobile">Pro 구독하기 - $3/월</span>
+              Pro 구독하기 - $3/월
             </button>
           </div>
 
@@ -3130,7 +3128,8 @@ export default function AdCookingClass() {
 
         body {
           font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-          background: #fafafa;
+          background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+          min-height: 100vh;
         }
 
         /* Navigation */
@@ -3367,6 +3366,7 @@ export default function AdCookingClass() {
             gap: 24px;
             min-height: auto;
             text-align: center;
+            background: transparent;
           }
 
           .landing-content {
@@ -3376,30 +3376,16 @@ export default function AdCookingClass() {
             gap: 16px;
           }
 
-          .title-desktop,
-          .subtitle-desktop,
-          .btn-text-desktop {
-            display: none;
-          }
-
-          .title-mobile,
-          .subtitle-mobile,
-          .btn-text-mobile {
-            display: inline;
-          }
-
           .landing-title {
-            font-size: 32px;
+            font-size: 24px !important;
             margin-bottom: 8px;
             line-height: 1.3;
-            white-space: normal;
           }
 
           .landing-subtitle {
             font-size: 16px;
             margin-bottom: 16px;
             line-height: 1.4;
-            white-space: normal;
           }
 
           .landing-buttons {
@@ -3414,7 +3400,6 @@ export default function AdCookingClass() {
             width: 100%;
             padding: 16px 24px;
             font-size: 16px;
-            white-space: normal;
             line-height: 1.3;
           }
 
@@ -3497,6 +3482,7 @@ export default function AdCookingClass() {
           justify-content: space-between;
           gap: 60px;
           min-height: 90vh;
+          background: transparent;
         }
 
         .landing-content {
@@ -3510,12 +3496,6 @@ export default function AdCookingClass() {
           line-height: 1.2;
           color: #2d3436;
           margin-bottom: 24px;
-        }
-
-        .title-mobile,
-        .subtitle-mobile,
-        .btn-text-mobile {
-          display: none;
         }
 
         .landing-subtitle {
