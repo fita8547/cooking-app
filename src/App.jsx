@@ -2723,7 +2723,7 @@ export default function AdCookingClass() {
 
           body {
             font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            background: linear-gradient(135deg, #fff5f0 0%, #ffe5e0 100%);
             min-height: 100vh;
           }
 
@@ -3128,7 +3128,7 @@ export default function AdCookingClass() {
 
         body {
           font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-          background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+          background: linear-gradient(135deg, #fff5f0 0%, #ffe5e0 100%);
           min-height: 100vh;
         }
 
@@ -3470,7 +3470,7 @@ export default function AdCookingClass() {
         /* Main Landing Page */
         .main-landing-page {
           min-height: 100vh;
-          background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+          background: linear-gradient(135deg, #fff5f0 0%, #ffe5e0 100%);
         }
 
         .landing-hero {
