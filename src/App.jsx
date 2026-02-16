@@ -3621,6 +3621,24 @@ export default function AdCookingClass() {
           font-weight: 700;
         }
 
+        .landing-buttons .btn-primary.btn-large {
+          background: linear-gradient(135deg, #ff6b6b 0%, #ff8787 100%) !important;
+          color: white !important;
+          border: none !important;
+          padding: 20px 48px;
+          border-radius: 16px !important;
+          font-size: 20px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 8px 24px rgba(255, 107, 107, 0.35);
+        }
+
+        .landing-buttons .btn-primary.btn-large:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 14px 32px rgba(255, 107, 107, 0.45);
+        }
+
         .btn-pro-login {
           background: #FFB8B8;
           color: white;
@@ -4209,14 +4227,54 @@ export default function AdCookingClass() {
           display: flex;
           gap: 16px;
           justify-content: center;
+          margin-top: 20px;
         }
 
         .step-navigation .btn-secondary {
-          padding: 16px 32px;
+          background: white !important;
+          color: #ff6b6b !important;
+          border: 2px solid #ff6b6b !important;
+          padding: 16px 36px !important;
+          min-width: 140px;
+          border-radius: 16px !important;
+          font-size: 16px;
+          font-weight: 600;
+          box-shadow: 0 4px 12px rgba(255, 107, 107, 0.15) !important;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          cursor: pointer;
+        }
+
+        .step-navigation .btn-secondary:hover {
+          background: #fff0f0 !important;
+          transform: translateY(-3px);
+          box-shadow: 0 8px 20px rgba(255, 107, 107, 0.25) !important;
+        }
+
+        .step-navigation .btn-secondary:active {
+          transform: translateY(-1px);
         }
 
         .step-navigation .btn-primary {
-          padding: 16px 48px;
+          background: linear-gradient(135deg, #ff6b6b 0%, #ff8787 100%) !important;
+          color: white !important;
+          border: none !important;
+          padding: 16px 48px !important;
+          min-width: 140px;
+          border-radius: 16px !important;
+          font-size: 16px;
+          font-weight: 600;
+          box-shadow: 0 6px 16px rgba(255, 107, 107, 0.3) !important;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          cursor: pointer;
+        }
+
+        .step-navigation .btn-primary:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 12px 28px rgba(255, 107, 107, 0.4) !important;
+        }
+
+        .step-navigation .btn-primary:active {
+          transform: translateY(-1px);
         }
 
         .btn-success {
