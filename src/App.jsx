@@ -2026,6 +2026,16 @@ export default function AdCookingClass() {
     const targetCalories = calculateTargetCalories();
     const [newAllergy, setNewAllergy] = useState('');
     const [newDisease, setNewDisease] = useState('');
+    
+    // 로컬 상태로 입력 관리 (끊김 방지)
+    const [localAge, setLocalAge] = useState(healthProfile.age);
+    const [localHeight, setLocalHeight] = useState(healthProfile.height);
+    const [localWeight, setLocalWeight] = useState(healthProfile.weight);
+    
+    // blur 시 상위 상태 업데이트
+    const handleBlur = (field, value) => {
+      setHealthProfile({...healthProfile, [field]: value});
+    };
 
     const addAllergy = () => {
       if (newAllergy.trim() && !healthProfile.allergies.includes(newAllergy.trim())) {
@@ -2071,8 +2081,9 @@ export default function AdCookingClass() {
               <label>나이</label>
               <input
                 type="number"
-                value={healthProfile.age}
-                onChange={(e) => setHealthProfile({...healthProfile, age: e.target.value})}
+                value={localAge}
+                onChange={(e) => setLocalAge(e.target.value)}
+                onBlur={(e) => handleBlur('age', e.target.value)}
                 className="input-field"
                 placeholder="30"
               />
@@ -2097,8 +2108,9 @@ export default function AdCookingClass() {
               <label>키 (cm)</label>
               <input
                 type="number"
-                value={healthProfile.height}
-                onChange={(e) => setHealthProfile({...healthProfile, height: e.target.value})}
+                value={localHeight}
+                onChange={(e) => setLocalHeight(e.target.value)}
+                onBlur={(e) => handleBlur('height', e.target.value)}
                 className="input-field"
                 placeholder="170"
               />
@@ -2108,8 +2120,9 @@ export default function AdCookingClass() {
               <label>몸무게 (kg)</label>
               <input
                 type="number"
-                value={healthProfile.weight}
-                onChange={(e) => setHealthProfile({...healthProfile, weight: e.target.value})}
+                value={localWeight}
+                onChange={(e) => setLocalWeight(e.target.value)}
+                onBlur={(e) => handleBlur('weight', e.target.value)}
                 className="input-field"
                 placeholder="65"
               />
